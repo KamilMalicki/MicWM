@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=MicWM
+Comment=Ultra-lightweight minimalist window manager by Kamil Malicki
+Exec=/usr/local/bin/micwm
+Type=Application
+DesktopNames=MicWM
