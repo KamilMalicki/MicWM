@@ -13,7 +13,7 @@
 * **Brutal Management:** Uses `XKillClient` for aggressive process termination to save resources.
 * **The Glow:** A border that can have a color selected from the `config.h` file.
 
----
+
 
 ### 🛠️ Installation
 
@@ -27,11 +27,11 @@ sudo apt install libx11-dev gcc make feh x11-xserver-utils xterm
 make
 sudo make install
 
-```
+
 
 *The installer automatically creates a template autostart script in your home directory.*
 
----
+
 
 ### ⌨️ Keybindings
 
@@ -45,7 +45,7 @@ sudo make install
 | **Alt + Left Click** | Move Window |
 | **Alt + Right Click** | Resize Window |
 
----
+
 
 ### ⚙️ Configuration & Autostart
 
