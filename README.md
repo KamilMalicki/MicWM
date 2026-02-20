@@ -11,27 +11,23 @@
 * **Dynamic Status Bar:** Real-time updates (Clock, RAM, etc.) via `xsetroot`.
 * **Custom Autostart:** Dedicated `~/.autoconfigscriptmicwm` script for wallpapers and startup apps.
 * **Brutal Management:** Uses `XKillClient` for aggressive process termination to save resources.
-* **The Glow:** a border that can have a color selected from the config.h file.
+* **The Glow:** A border that can have a color selected from the `config.h` file.
 
 ---
 
 ### 🛠️ Installation
 
-1. **Dependencies:**
-Install X11 libraries and build tools:
+1. **Dependencies** Install X11 libraries and build tools:
 ```bash
 sudo apt install libx11-dev gcc make feh x11-xserver-utils xterm
 
 ```
 
-
-2. **Build and Install:**
-```bash
+2. **Build and Install** ```bash
 make
 sudo make install
 
 ```
-
 
 *The installer automatically creates a template autostart script in your home directory.*
 
@@ -40,7 +36,7 @@ sudo make install
 ### ⌨️ Keybindings
 
 | Keybind | Action |
-| --- | --- |
+| :--- | :--- |
 | **Alt + T** | Launch Terminal (`xterm`) |
 | **Alt + Q** | Kill active window (Brutal/Instant) |
 | **Alt + Shift + F** | Fullscreen Mode (No borders) |
@@ -61,7 +57,6 @@ sudo make install
 ### 💡 Pro-Tips
 
 #### 1. Running apps as a specific user
-
 If you are logged in as **root** (e.g., in a TTY) but want to launch applications that belong to your regular user (to keep config files clean and avoid permission issues), use the following command inside your MicWM terminal:
 
 ```bash
@@ -93,5 +88,7 @@ xinit /usr/local/bin/micwm -- :1
 ---
 
 ### 📜 License
+
 The GUI is open source, so you can compile it any way you like, but it is not for distribution under your own name.
-With respect, Kamil Malicki
+
+**With respect, Kamil Malicki**
