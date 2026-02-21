@@ -26,7 +26,7 @@ sudo apt install libx11-dev gcc make feh x11-xserver-utils xterm
 2. **Build and Install** ```bash
 make
 sudo make install
-
+```
 
 
 *The installer automatically creates a template autostart script in your home directory.*
