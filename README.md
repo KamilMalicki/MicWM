@@ -27,6 +27,7 @@ sudo apt install libx11-dev gcc make feh x11-xserver-utils xterm
 ```bash
 make
 sudo make install
+
 ```
 
 
