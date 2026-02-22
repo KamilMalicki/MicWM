@@ -1,19 +1,18 @@
-// config.h - tu ustawiam wszystkie duperele zeby nie grzebac w glownym kodzie
+// config.h - główny plik konfiguracyjny MicWM
+// Aby zastosować zmiany, zapisz plik i przebuduj menedżer (make && sudo make install)
 
-// kolory ramek (zapisane w HEX)
-#define KOLOR_ZWYKLY  0xffffff  // biala ramka jak okno sobie lezy
-#define KOLOR_FOCUS   0xffffff  // wsciekly zolty jak w nie klikne/najade
+// --- WYGLĄD I KOLORY ---
+#define KOLOR_ZWYKLY  0x1f1f1f  // Kolor ramki nieaktywnego okna (HEX). Tu: ciemnoszary.
+#define KOLOR_FOCUS   0xffffff  // Kolor ramki aktywnego okna (tego pod myszką). Tu: czysty biały.
 
-// rozmiary
-#define GRUBOSC_RAMKI 4         // jaka gruba ramka w pikselach
-#define MIN_ROZMIAR   10        // do ilu pikseli moge scisnac okno (zeby nie zepsuc X11)
+// --- WYMIARY ---
+#define GRUBOSC_RAMKI 4         // Grubość obramowania dookoła okien (w pikselach).
+#define MIN_ROZMIAR   10        // Minimalny rozmiar okna w pikselach (chroni przed crashem X11 przy maksymalnym zmniejszeniu).
 
-// pasek na gorze
-#define WYSOKOSC_PASKA 20       // ile pikseli zre pasek
-#define TEKST_NA_PASKU " MicWM - Czekam na xsetroot... " // to sie wyswietli tylko do momentu odpalenia skryptu z zegarem
+// --- PASEK STATUSU ---
+#define WYSOKOSC_PASKA 20       // Ile pikseli od góry ekranu zajmuje pasek statusu.
+#define TEKST_NA_PASKU " MicWM " // Tekst wyświetlany ułamek sekundy po starcie, zanim skrypt autostartu go nadpisze.
 
-// jaki terminal odpalam pod Alt+T
-#define MOJ_TERMINAL "st"
-
-// skrypt startowy z tapeta i paskiem (zeby dalo sie zmienic bez grzebania w silniku)
-#define AUTOSTART_SCRIPT "bash $HOME/.autoconfigscriptmicwm &"
+// --- APLIKACJE I SKRYPTY ---
+#define MOJ_TERMINAL "st"       // Domyślny emulator terminala odpalany skrótem Alt + T (np. "st", "xterm", "alacritty").
+#define AUTOSTART_SCRIPT "bash $HOME/.autoconfigscriptmicwm &" // Skrypt uruchamiany przy starcie (ładuje tapetę, pasek i inne programy w tle).

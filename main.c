@@ -1,5 +1,6 @@
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
+#include <X11/XF86keysym.h>
 #include <X11/cursorfont.h>
 #include <X11/Xatom.h>
 #include <stdlib.h>
@@ -22,6 +23,7 @@ int main(void) {
     Cursor cursor;
     GC gc;
     char status_text[256];
+    Atom wm_protocols, wm_delete_window;
     
     strncpy(status_text, TEKST_NA_PASKU, sizeof(status_text) - 1);
     signal(SIGCHLD, SIG_IGN);
@@ -31,6 +33,9 @@ int main(void) {
 
     int screen = DefaultScreen(dpy);
     root = DefaultRootWindow(dpy);
+
+    wm_protocols = XInternAtom(dpy, "WM_PROTOCOLS", False);
+    wm_delete_window = XInternAtom(dpy, "WM_DELETE_WINDOW", False);
 
     cursor = XCreateFontCursor(dpy, XC_left_ptr);
     XDefineCursor(dpy, root, cursor);
@@ -56,6 +61,12 @@ int main(void) {
     XGrabKey(dpy, XKeysymToKeycode(dpy, XK_q), Mod1Mask | ShiftMask, root, True, GrabModeAsync, GrabModeAsync);
     XGrabKey(dpy, XKeysymToKeycode(dpy, XK_f), Mod1Mask | ShiftMask, root, True, GrabModeAsync, GrabModeAsync);
     XGrabKey(dpy, XKeysymToKeycode(dpy, XK_w), Mod1Mask | ShiftMask, root, True, GrabModeAsync, GrabModeAsync);
+
+    XGrabKey(dpy, XKeysymToKeycode(dpy, XF86XK_AudioRaiseVolume), 0, root, True, GrabModeAsync, GrabModeAsync);
+    XGrabKey(dpy, XKeysymToKeycode(dpy, XF86XK_AudioLowerVolume), 0, root, True, GrabModeAsync, GrabModeAsync);
+    XGrabKey(dpy, XKeysymToKeycode(dpy, XF86XK_AudioMute), 0, root, True, GrabModeAsync, GrabModeAsync);
+    XGrabKey(dpy, XKeysymToKeycode(dpy, XF86XK_MonBrightnessUp), 0, root, True, GrabModeAsync, GrabModeAsync);
+    XGrabKey(dpy, XKeysymToKeycode(dpy, XF86XK_MonBrightnessDown), 0, root, True, GrabModeAsync, GrabModeAsync);
 
     XGrabButton(dpy, 1, Mod1Mask, root, True, ButtonPressMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
     XGrabButton(dpy, 3, Mod1Mask, root, True, ButtonPressMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
@@ -99,6 +110,8 @@ int main(void) {
             XSetWindowBorderWidth(dpy, ev.xmaprequest.window, GRUBOSC_RAMKI);
             XSetWindowBorder(dpy, ev.xmaprequest.window, KOLOR_FOCUS);
             XSetInputFocus(dpy, ev.xmaprequest.window, RevertToParent, CurrentTime);
+            
+            XSelectInput(dpy, ev.xmaprequest.window, EnterWindowMask | LeaveWindowMask);
         }
         else if(ev.type == ConfigureRequest) {
             XWindowChanges wc;
@@ -111,13 +124,31 @@ int main(void) {
             wc.stack_mode = ev.xconfigurerequest.detail;
             XConfigureWindow(dpy, ev.xconfigurerequest.window, ev.xconfigurerequest.value_mask, &wc);
         }
+        else if(ev.type == EnterNotify && ev.xcrossing.window != bar && ev.xcrossing.window != root) {
+            XSetInputFocus(dpy, ev.xcrossing.window, RevertToParent, CurrentTime);
+            XSetWindowBorder(dpy, ev.xcrossing.window, KOLOR_FOCUS);
+        }
+        else if(ev.type == LeaveNotify && ev.xcrossing.window != bar && ev.xcrossing.window != root) {
+            XSetWindowBorder(dpy, ev.xcrossing.window, KOLOR_ZWYKLY);
+        }
         else if(ev.type == KeyPress) {
             KeySym ks = XLookupKeysym(&ev.xkey, 0);
             
             if(ks == XK_q && (ev.xkey.state & ShiftMask)) break;
-
+            else if(ks == XF86XK_AudioRaiseVolume) system("v=$(amixer sset Master 5%+ | grep -m1 -oE '[0-9]+%') && xsetroot -name \" [ VOLUME: $v ] \" &");
+            else if(ks == XF86XK_AudioLowerVolume) system("v=$(amixer sset Master 5%- | grep -m1 -oE '[0-9]+%') && xsetroot -name \" [ VOLUME: $v ] \" &");
+            else if(ks == XF86XK_AudioMute) system("xsetroot -name \" [ AUDIO MUTED / UNMUTED ] \" && amixer sset Master toggle &");
+            else if(ks == XF86XK_MonBrightnessUp) system("b=$(brightnessctl set +5% | grep -m1 -oE '[0-9]+%') && xsetroot -name \" [ BRIGHTNESS: $b ] \" &");
+            else if(ks == XF86XK_MonBrightnessDown) system("b=$(brightnessctl set 5%- | grep -m1 -oE '[0-9]+%') && xsetroot -name \" [ BRIGHTNESS: $b ] \" &");
             else if(ks == XK_q && ev.xkey.subwindow != None && ev.xkey.subwindow != bar) {
-                XKillClient(dpy, ev.xkey.subwindow);
+                XEvent ke;
+                ke.type = ClientMessage;
+                ke.xclient.window = ev.xkey.subwindow;
+                ke.xclient.message_type = wm_protocols;
+                ke.xclient.format = 32;
+                ke.xclient.data.l[0] = wm_delete_window;
+                ke.xclient.data.l[1] = CurrentTime;
+                XSendEvent(dpy, ev.xkey.subwindow, False, NoEventMask, &ke);
             }
             else if(ks == XK_f && (ev.xkey.state & ShiftMask) && ev.xkey.subwindow != None && ev.xkey.subwindow != bar) {
                 XMoveResizeWindow(dpy, ev.xkey.subwindow, 0, WYSOKOSC_PASKA, 
@@ -153,11 +184,18 @@ int main(void) {
         else if(ev.type == MotionNotify && start.subwindow != None) {
             int xdiff = ev.xbutton.x_root - start.x_root;
             int ydiff = ev.xbutton.y_root - start.y_root;
-            XMoveResizeWindow(dpy, start.subwindow,
-                attr.x + (start.button == 1 ? xdiff : 0),
-                attr.y + (start.button == 1 ? ydiff : 0),
-                MAX(MIN_ROZMIAR, attr.width + (start.button == 3 ? xdiff : 0)),
-                MAX(MIN_ROZMIAR, attr.height + (start.button == 3 ? ydiff : 0)));
+            
+            int nx = attr.x + (start.button == 1 ? xdiff : 0);
+            int ny = attr.y + (start.button == 1 ? ydiff : 0);
+            int nw = MAX(MIN_ROZMIAR, attr.width + (start.button == 3 ? xdiff : 0));
+            int nh = MAX(MIN_ROZMIAR, attr.height + (start.button == 3 ? ydiff : 0));
+            
+            if (nx < 0) nx = 0;
+            if (ny < WYSOKOSC_PASKA) ny = WYSOKOSC_PASKA;
+            if (nx + nw + 2 * GRUBOSC_RAMKI > DisplayWidth(dpy, screen)) nx = DisplayWidth(dpy, screen) - nw - 2 * GRUBOSC_RAMKI;
+            if (ny + nh + 2 * GRUBOSC_RAMKI > DisplayHeight(dpy, screen)) ny = DisplayHeight(dpy, screen) - nh - 2 * GRUBOSC_RAMKI;
+
+            XMoveResizeWindow(dpy, start.subwindow, nx, ny, nw, nh);
         }
         else if(ev.type == ButtonRelease && start.subwindow != None) {
             XSetWindowBorder(dpy, start.subwindow, KOLOR_ZWYKLY);
