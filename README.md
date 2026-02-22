@@ -12,6 +12,7 @@
 * **Custom Autostart:** Dedicated `~/.autoconfigscriptmicwm` script for wallpapers and startup apps.
 * **Brutal Management:** Uses `XKillClient` for aggressive process termination to save resources.
 * **The Glow:** A border that can have a color selected from the `config.h` file.
+* **Option to change the sound level and brightness**: as in other systems, use the f keys
 
 
 
@@ -39,7 +40,7 @@ sudo make install
 
 | Keybind | Action |
 | :--- | :--- |
-| **Alt + T** | Launch Terminal (`xterm`) |
+| **Alt + T** | Launch Terminal (`st`) |
 | **Alt + Q** | Kill active window (Brutal/Instant) |
 | **Alt + Shift + F** | Fullscreen Mode (No borders) |
 | **Alt + Shift + W** | Windowed Mode (800x600, Centered) |
