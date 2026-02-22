@@ -22,9 +22,10 @@ int main(void) {
     Cursor cursor;
     GC gc;
     char status_text[256];
-    strcpy(status_text, TEKST_NA_PASKU);
-
+    
+    strncpy(status_text, TEKST_NA_PASKU, sizeof(status_text) - 1);
     signal(SIGCHLD, SIG_IGN);
+
     if(!(dpy = XOpenDisplay(NULL))) return 1;
     XSetErrorHandler(xerror);
 
@@ -34,22 +35,28 @@ int main(void) {
     cursor = XCreateFontCursor(dpy, XC_left_ptr);
     XDefineCursor(dpy, root, cursor);
 
-    bar = XCreateSimpleWindow(dpy, root, 0, 0, DisplayWidth(dpy, screen), WYSOKOSC_PASKA, 0, 
-                              BlackPixel(dpy, screen), BlackPixel(dpy, screen));
+    XSetWindowAttributes bar_attr;
+    bar_attr.override_redirect = True;
+    bar_attr.background_pixel = BlackPixel(dpy, screen);
+
+    bar = XCreateWindow(dpy, root, 0, 0, DisplayWidth(dpy, screen), WYSOKOSC_PASKA, 0,
+                        CopyFromParent, InputOutput, CopyFromParent,
+                        CWOverrideRedirect | CWBackPixel, &bar_attr);
 
     gc = XCreateGC(dpy, bar, 0, NULL);
     XSetForeground(dpy, gc, WhitePixel(dpy, screen));
+    
     XSelectInput(dpy, bar, ExposureMask);
     XMapWindow(dpy, bar);
 
     XSelectInput(dpy, root, SubstructureRedirectMask | SubstructureNotifyMask | PropertyChangeMask);
 
-    // Skroty klawiszowe
     XGrabKey(dpy, XKeysymToKeycode(dpy, XK_t), Mod1Mask, root, True, GrabModeAsync, GrabModeAsync);
     XGrabKey(dpy, XKeysymToKeycode(dpy, XK_q), Mod1Mask, root, True, GrabModeAsync, GrabModeAsync);
     XGrabKey(dpy, XKeysymToKeycode(dpy, XK_q), Mod1Mask | ShiftMask, root, True, GrabModeAsync, GrabModeAsync);
     XGrabKey(dpy, XKeysymToKeycode(dpy, XK_f), Mod1Mask | ShiftMask, root, True, GrabModeAsync, GrabModeAsync);
     XGrabKey(dpy, XKeysymToKeycode(dpy, XK_w), Mod1Mask | ShiftMask, root, True, GrabModeAsync, GrabModeAsync);
+
     XGrabButton(dpy, 1, Mod1Mask, root, True, ButtonPressMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
     XGrabButton(dpy, 3, Mod1Mask, root, True, ButtonPressMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
 
@@ -60,7 +67,8 @@ int main(void) {
 
     while(1) {
         XNextEvent(dpy, &ev);
-        
+        XRaiseWindow(dpy, bar);
+
         if(ev.type == Expose && ev.xexpose.window == bar) {
             XClearWindow(dpy, bar);
             XDrawString(dpy, bar, gc, 10, 14, status_text, strlen(status_text));
@@ -77,12 +85,15 @@ int main(void) {
         }
         else if(ev.type == MapRequest) {
             if (ev.xmaprequest.window == bar) continue;
+
             XWindowAttributes wa, cwa;
             XGetWindowAttributes(dpy, root, &wa);
             XGetWindowAttributes(dpy, ev.xmaprequest.window, &cwa);
+
             int x = (wa.width - cwa.width) / 2;
             int y = (wa.height - cwa.height) / 2;
             if (y < WYSOKOSC_PASKA) y = WYSOKOSC_PASKA;
+
             XMoveWindow(dpy, ev.xmaprequest.window, x, y);
             XMapWindow(dpy, ev.xmaprequest.window);
             XSetWindowBorderWidth(dpy, ev.xmaprequest.window, GRUBOSC_RAMKI);
@@ -102,19 +113,22 @@ int main(void) {
         }
         else if(ev.type == KeyPress) {
             KeySym ks = XLookupKeysym(&ev.xkey, 0);
+            
             if(ks == XK_q && (ev.xkey.state & ShiftMask)) break;
+
             else if(ks == XK_q && ev.xkey.subwindow != None && ev.xkey.subwindow != bar) {
                 XKillClient(dpy, ev.xkey.subwindow);
             }
-            else if(ks == XK_f && (ev.xkey.state & ShiftMask) && ev.xkey.subwindow != None) {
-                XMoveResizeWindow(dpy, ev.xkey.subwindow, 0, WYSOKOSC_PASKA, DisplayWidth(dpy, screen), DisplayHeight(dpy, screen) - WYSOKOSC_PASKA);
+            else if(ks == XK_f && (ev.xkey.state & ShiftMask) && ev.xkey.subwindow != None && ev.xkey.subwindow != bar) {
+                XMoveResizeWindow(dpy, ev.xkey.subwindow, 0, WYSOKOSC_PASKA, 
+                                 DisplayWidth(dpy, screen), DisplayHeight(dpy, screen) - WYSOKOSC_PASKA);
                 XSetWindowBorderWidth(dpy, ev.xkey.subwindow, 0);
                 XRaiseWindow(dpy, ev.xkey.subwindow);
             }
-            else if(ks == XK_w && (ev.xkey.state & ShiftMask) && ev.xkey.subwindow != None) {
+            else if(ks == XK_w && (ev.xkey.state & ShiftMask) && ev.xkey.subwindow != None && ev.xkey.subwindow != bar) {
                 XMoveResizeWindow(dpy, ev.xkey.subwindow, (DisplayWidth(dpy, screen)-800)/2, (DisplayHeight(dpy, screen)-600)/2, 800, 600);
                 XSetWindowBorderWidth(dpy, ev.xkey.subwindow, GRUBOSC_RAMKI);
-                XSetWindowBorder(dpy, ev.xmaprequest.window, KOLOR_FOCUS);
+                XSetWindowBorder(dpy, ev.xkey.subwindow, KOLOR_FOCUS);
             }
             else if(ks == XK_t) {
                 if(fork() == 0) {
@@ -128,13 +142,19 @@ int main(void) {
             XGetWindowAttributes(dpy, ev.xbutton.subwindow, &attr);
             XSetInputFocus(dpy, ev.xbutton.subwindow, RevertToParent, CurrentTime);
             XRaiseWindow(dpy, ev.xbutton.subwindow);
-            if (attr.border_width > 0) { start = ev.xbutton; }
-            else { start.subwindow = None; }
+            
+            if (attr.border_width > 0) { 
+                start = ev.xbutton; 
+                XSetWindowBorder(dpy, ev.xbutton.subwindow, KOLOR_FOCUS); 
+            } else { 
+                start.subwindow = None; 
+            }
         }
         else if(ev.type == MotionNotify && start.subwindow != None) {
             int xdiff = ev.xbutton.x_root - start.x_root;
             int ydiff = ev.xbutton.y_root - start.y_root;
-            XMoveResizeWindow(dpy, start.subwindow, attr.x + (start.button == 1 ? xdiff : 0),
+            XMoveResizeWindow(dpy, start.subwindow,
+                attr.x + (start.button == 1 ? xdiff : 0),
                 attr.y + (start.button == 1 ? ydiff : 0),
                 MAX(MIN_ROZMIAR, attr.width + (start.button == 3 ? xdiff : 0)),
                 MAX(MIN_ROZMIAR, attr.height + (start.button == 3 ? ydiff : 0)));
@@ -144,6 +164,7 @@ int main(void) {
             start.subwindow = None;
         }
     }
+
     XFreeGC(dpy, gc);
     XFreeCursor(dpy, cursor);
     XCloseDisplay(dpy);
