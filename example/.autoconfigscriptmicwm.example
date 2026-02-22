@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# Tapeta
+feh --bg-scale /home/KamilMalicki/Dokumenty/tapeta.jpg &
+
+while true; do
+    # 1. BATERIA (automatycznie znajduje BAT0, BAT1 itp.)
+    BAT_PATH=$(ls -d /sys/class/power_supply/BAT* 2>/dev/null | head -n 1)
+    if [ -n "$BAT_PATH" ]; then
+        BAT="BAT: $(cat $BAT_PATH/capacity)%"
+    else
+        BAT="AC"
+    fi
+
+    # 2. WIFI (czyta prosto z kernela, bez iwgetid!)
+    if grep -q "up" /sys/class/net/wl*/operstate 2>/dev/null; then
+        WIFI="WiFi: ON"
+    else
+        WIFI="WiFi: OFF"
+    fi
+
+    # 3. CPU
+    CPU="CPU: $(cut -d' ' -f1 /proc/loadavg)"
+
+    # 4. RAM (LC_ALL=C wymusza j. angielski, wiec awk '/^Mem:/' zawsze zadziala)
+    RAM="RAM: $(LC_ALL=C free -m | awk '/^Mem:/ {print $3}')MB"
+
+    # 5. CZAS
+    CZAS="$(date '+%H:%M:%S')"
+
+    # SKLADAMY WSZYSTKO DO KUPY
+    xsetroot -name " [ $WIFI ] [ $CPU ] [ $RAM ] [ $BAT ] [ $CZAS ] "
+    
+    # PAUZA (bez tego zarzniesz procesor)
+    sleep 1
+done &
