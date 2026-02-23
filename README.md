@@ -12,15 +12,14 @@
 * **Custom Autostart:** Dedicated `~/.autoconfigscriptmicwm` script for wallpapers and startup apps.
 * **Brutal Management:** Uses `XKillClient` for aggressive process termination to save resources.
 * **The Glow:** A border that can have a color selected from the `config.h` file.
-* **Option to change the sound level and brightness**: as in other systems, use the f keys
-
-
+* **Option to change the sound level and brightness:** As in other systems, use the f keys.
+* **Blocking and unblocking windows:** Lock and unlock apps to remove the cursor from apps that grab the cursor or to simply keep it out of the way.
 
 ### 🛠️ Installation
 
 1. **Dependencies** Install X11 libraries and build tools:
 ```bash
-sudo apt install libx11-dev gcc make feh x11-xserver-utils xterm
+sudo apt install libx11-dev gcc make feh x11-xserver-utils xterm brightnessctl alsa-utils
 
 ```
 
@@ -40,13 +39,14 @@ sudo make install
 
 | Keybind | Action |
 | :--- | :--- |
-| **Alt + T** | Launch Terminal (`st`) |
-| **Alt + Q** | Kill active window (Brutal/Instant) |
-| **Alt + Shift + F** | Fullscreen Mode (No borders) |
-| **Alt + Shift + W** | Windowed Mode (800x600, Centered) |
-| **Alt + Shift + Q** | **Exit MicWM** (Return to TTY) |
-| **Alt + Left Click** | Move Window |
-| **Alt + Right Click** | Resize Window |
+| **Super + T** | Launch Terminal (`st`) |
+| **Super + Q** | Kill active window (Brutal/Instant) |
+| **Super + Shift + F** | Fullscreen Mode (No borders) |
+| **Super + Shift + W** | Windowed Mode (800x600, Centered) |
+| **Super + Shift + Q** | **Exit MicWM** (Return to TTY) |
+| **Super + Left Click** | Move Window |
+| **Super + Right Click** | Resize Window |
+| **Super + D**| Lock and Unlock Window |
 
 
 
