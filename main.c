@@ -1,4 +1,5 @@
 #include <X11/Xlib.h>
+#include <X11/Xutil.h>
 #include <X11/keysym.h>
 #include <X11/XF86keysym.h>
 #include <X11/cursorfont.h>
@@ -24,6 +25,10 @@ int main(void) {
     GC gc;
     char status_text[256];
     Atom wm_protocols, wm_delete_window;
+    int in_prompt = 0;
+    char prompt_buf[256] = "";
+    int prompt_len = 0;
+    Window locked_window = None;
     
     strncpy(status_text, TEKST_NA_PASKU, sizeof(status_text) - 1);
     signal(SIGCHLD, SIG_IGN);
@@ -56,11 +61,14 @@ int main(void) {
 
     XSelectInput(dpy, root, SubstructureRedirectMask | SubstructureNotifyMask | PropertyChangeMask);
 
-    XGrabKey(dpy, XKeysymToKeycode(dpy, XK_t), Mod1Mask, root, True, GrabModeAsync, GrabModeAsync);
-    XGrabKey(dpy, XKeysymToKeycode(dpy, XK_q), Mod1Mask, root, True, GrabModeAsync, GrabModeAsync);
-    XGrabKey(dpy, XKeysymToKeycode(dpy, XK_q), Mod1Mask | ShiftMask, root, True, GrabModeAsync, GrabModeAsync);
-    XGrabKey(dpy, XKeysymToKeycode(dpy, XK_f), Mod1Mask | ShiftMask, root, True, GrabModeAsync, GrabModeAsync);
-    XGrabKey(dpy, XKeysymToKeycode(dpy, XK_w), Mod1Mask | ShiftMask, root, True, GrabModeAsync, GrabModeAsync);
+    XGrabKey(dpy, XKeysymToKeycode(dpy, XK_t), MOD_KEY, root, True, GrabModeAsync, GrabModeAsync);
+    XGrabKey(dpy, XKeysymToKeycode(dpy, XK_p), MOD_KEY, root, True, GrabModeAsync, GrabModeAsync);
+    XGrabKey(dpy, XKeysymToKeycode(dpy, XK_q), MOD_KEY, root, True, GrabModeAsync, GrabModeAsync);
+    XGrabKey(dpy, XKeysymToKeycode(dpy, XK_s), MOD_KEY, root, True, GrabModeAsync, GrabModeAsync);
+    XGrabKey(dpy, XKeysymToKeycode(dpy, XK_d), MOD_KEY, root, True, GrabModeAsync, GrabModeAsync);
+    XGrabKey(dpy, XKeysymToKeycode(dpy, XK_q), MOD_KEY | ShiftMask, root, True, GrabModeAsync, GrabModeAsync);
+    XGrabKey(dpy, XKeysymToKeycode(dpy, XK_f), MOD_KEY | ShiftMask, root, True, GrabModeAsync, GrabModeAsync);
+    XGrabKey(dpy, XKeysymToKeycode(dpy, XK_w), MOD_KEY | ShiftMask, root, True, GrabModeAsync, GrabModeAsync);
 
     XGrabKey(dpy, XKeysymToKeycode(dpy, XF86XK_AudioRaiseVolume), 0, root, True, GrabModeAsync, GrabModeAsync);
     XGrabKey(dpy, XKeysymToKeycode(dpy, XF86XK_AudioLowerVolume), 0, root, True, GrabModeAsync, GrabModeAsync);
@@ -68,8 +76,8 @@ int main(void) {
     XGrabKey(dpy, XKeysymToKeycode(dpy, XF86XK_MonBrightnessUp), 0, root, True, GrabModeAsync, GrabModeAsync);
     XGrabKey(dpy, XKeysymToKeycode(dpy, XF86XK_MonBrightnessDown), 0, root, True, GrabModeAsync, GrabModeAsync);
 
-    XGrabButton(dpy, 1, Mod1Mask, root, True, ButtonPressMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
-    XGrabButton(dpy, 3, Mod1Mask, root, True, ButtonPressMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
+    XGrabButton(dpy, 1, MOD_KEY, root, True, ButtonPressMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
+    XGrabButton(dpy, 3, MOD_KEY, root, True, ButtonPressMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
 
     start.subwindow = None;
     start.button = 0;
@@ -82,7 +90,13 @@ int main(void) {
 
         if(ev.type == Expose && ev.xexpose.window == bar) {
             XClearWindow(dpy, bar);
-            XDrawString(dpy, bar, gc, 10, 14, status_text, strlen(status_text));
+            if(in_prompt) {
+                char temp[300];
+                snprintf(temp, sizeof(temp), " URUCHOM: %s_", prompt_buf);
+                XDrawString(dpy, bar, gc, 10, 14, temp, strlen(temp));
+            } else {
+                XDrawString(dpy, bar, gc, 10, 14, status_text, strlen(status_text));
+            }
         }
         else if(ev.type == PropertyNotify && ev.xproperty.window == root && ev.xproperty.atom == XA_WM_NAME) {
             char *name = NULL;
@@ -91,8 +105,10 @@ int main(void) {
                 status_text[sizeof(status_text) - 1] = '\0';
                 XFree(name);
             }
-            XClearWindow(dpy, bar);
-            XDrawString(dpy, bar, gc, 10, 14, status_text, strlen(status_text));
+            if(!in_prompt) {
+                XClearWindow(dpy, bar);
+                XDrawString(dpy, bar, gc, 10, 14, status_text, strlen(status_text));
+            }
         }
         else if(ev.type == MapRequest) {
             if (ev.xmaprequest.window == bar) continue;
@@ -125,22 +141,137 @@ int main(void) {
             XConfigureWindow(dpy, ev.xconfigurerequest.window, ev.xconfigurerequest.value_mask, &wc);
         }
         else if(ev.type == EnterNotify && ev.xcrossing.window != bar && ev.xcrossing.window != root) {
-            XSetInputFocus(dpy, ev.xcrossing.window, RevertToParent, CurrentTime);
-            XSetWindowBorder(dpy, ev.xcrossing.window, KOLOR_FOCUS);
+            if(ev.xcrossing.window != locked_window) {
+                XSetInputFocus(dpy, ev.xcrossing.window, RevertToParent, CurrentTime);
+                XSetWindowBorder(dpy, ev.xcrossing.window, KOLOR_FOCUS);
+            }
         }
         else if(ev.type == LeaveNotify && ev.xcrossing.window != bar && ev.xcrossing.window != root) {
-            XSetWindowBorder(dpy, ev.xcrossing.window, KOLOR_ZWYKLY);
+            if(ev.xcrossing.window != locked_window) {
+                XSetWindowBorder(dpy, ev.xcrossing.window, KOLOR_ZWYKLY);
+            }
         }
         else if(ev.type == KeyPress) {
-            KeySym ks = XLookupKeysym(&ev.xkey, 0);
-            
-            if(ks == XK_q && (ev.xkey.state & ShiftMask)) break;
-            else if(ks == XF86XK_AudioRaiseVolume) system("v=$(amixer sset Master 5%+ | grep -m1 -oE '[0-9]+%') && xsetroot -name \" [ VOLUME: $v ] \" &");
-            else if(ks == XF86XK_AudioLowerVolume) system("v=$(amixer sset Master 5%- | grep -m1 -oE '[0-9]+%') && xsetroot -name \" [ VOLUME: $v ] \" &");
-            else if(ks == XF86XK_AudioMute) system("xsetroot -name \" [ AUDIO MUTED / UNMUTED ] \" && amixer sset Master toggle &");
-            else if(ks == XF86XK_MonBrightnessUp) system("b=$(brightnessctl set +5% | grep -m1 -oE '[0-9]+%') && xsetroot -name \" [ BRIGHTNESS: $b ] \" &");
-            else if(ks == XF86XK_MonBrightnessDown) system("b=$(brightnessctl set 5%- | grep -m1 -oE '[0-9]+%') && xsetroot -name \" [ BRIGHTNESS: $b ] \" &");
-            else if(ks == XK_q && ev.xkey.subwindow != None && ev.xkey.subwindow != bar) {
+            KeySym ks;
+            char keybuf[32];
+            int klen = XLookupString(&ev.xkey, keybuf, sizeof(keybuf), &ks, NULL);
+            KeySym base_ks = XLookupKeysym(&ev.xkey, 0);
+
+            if(in_prompt) {
+                if(ks == XK_Return) {
+                    if(prompt_len > 0) {
+                        if(fork() == 0) {
+                            close(ConnectionNumber(dpy));
+                            execlp("/bin/sh", "sh", "-c", prompt_buf, NULL);
+                            _exit(0);
+                        }
+                    }
+                    in_prompt = 0;
+                    prompt_len = 0;
+                    prompt_buf[0] = '\0';
+                    XUngrabKeyboard(dpy, CurrentTime);
+                    XClearWindow(dpy, bar);
+                    XDrawString(dpy, bar, gc, 10, 14, status_text, strlen(status_text));
+                } else if(ks == XK_Escape) {
+                    in_prompt = 0;
+                    prompt_len = 0;
+                    prompt_buf[0] = '\0';
+                    XUngrabKeyboard(dpy, CurrentTime);
+                    XClearWindow(dpy, bar);
+                    XDrawString(dpy, bar, gc, 10, 14, status_text, strlen(status_text));
+                } else if(ks == XK_BackSpace) {
+                    if(prompt_len > 0) {
+                        prompt_len--;
+                        prompt_buf[prompt_len] = '\0';
+                    }
+                    XClearWindow(dpy, bar);
+                    char temp[300];
+                    snprintf(temp, sizeof(temp), " URUCHOM: %s_", prompt_buf);
+                    XDrawString(dpy, bar, gc, 10, 14, temp, strlen(temp));
+                } else if(klen > 0 && prompt_len + klen < sizeof(prompt_buf) - 1 && keybuf[0] >= 32 && keybuf[0] <= 126) {
+                    strncpy(prompt_buf + prompt_len, keybuf, klen);
+                    prompt_len += klen;
+                    prompt_buf[prompt_len] = '\0';
+                    XClearWindow(dpy, bar);
+                    char temp[300];
+                    snprintf(temp, sizeof(temp), " URUCHOM: %s_", prompt_buf);
+                    XDrawString(dpy, bar, gc, 10, 14, temp, strlen(temp));
+                }
+                continue;
+            }
+
+            if(base_ks == XK_p && (ev.xkey.state & MOD_KEY)) {
+                in_prompt = 1;
+                prompt_len = 0;
+                prompt_buf[0] = '\0';
+                XGrabKeyboard(dpy, root, True, GrabModeAsync, GrabModeAsync, CurrentTime);
+                XClearWindow(dpy, bar);
+                XDrawString(dpy, bar, gc, 10, 14, " URUCHOM: _", 11);
+            }
+            else if(base_ks == XK_d && (ev.xkey.state & MOD_KEY)) {
+                if (locked_window == None) {
+                    Window focused;
+                    int revert_to;
+                    XGetInputFocus(dpy, &focused, &revert_to);
+                    if (focused != root && focused != bar && focused != None) {
+                        locked_window = focused;
+                        XSetInputFocus(dpy, root, RevertToParent, CurrentTime);
+                        XSetWindowBorder(dpy, locked_window, KOLOR_ZWYKLY);
+                    }
+                } else {
+                    locked_window = None;
+                }
+            }
+            else if(base_ks == XK_s && (ev.xkey.state & MOD_KEY)) {
+                Window d1, d2, *wins = NULL;
+                unsigned int num = 0;
+                if(XQueryTree(dpy, root, &d1, &d2, &wins, &num)) {
+                    int valid_count = 0;
+                    Window valid_wins[100];
+                    for(unsigned int i = 0; i < num; i++) {
+                        XWindowAttributes wa;
+                        if(wins[i] != bar && XGetWindowAttributes(dpy, wins[i], &wa) && wa.map_state == IsViewable && !wa.override_redirect) {
+                            if (valid_count < 100) valid_wins[valid_count++] = wins[i];
+                        }
+                    }
+                    if(wins) XFree(wins);
+
+                    int sw = DisplayWidth(dpy, screen);
+                    int sh = DisplayHeight(dpy, screen) - WYSOKOSC_PASKA;
+                    int sy = WYSOKOSC_PASKA;
+
+                    for (int i = 0; i < valid_count; i++) {
+                        int nx, ny, nw, nh;
+                        if (valid_count == 1) {
+                            nx = 0; ny = sy; nw = sw; nh = sh;
+                        } else if (i == 0) {
+                            nx = 0; ny = sy; nw = sw / 2; nh = sh;
+                        } else {
+                            int sc = valid_count - 1;
+                            nx = sw / 2;
+                            nw = sw - (sw / 2);
+                            nh = sh / sc;
+                            ny = sy + (i - 1) * nh;
+                            if (i == valid_count - 1) nh = sh - (ny - sy);
+                        }
+                        nw -= 2 * GRUBOSC_RAMKI;
+                        nh -= 2 * GRUBOSC_RAMKI;
+                        if(nw < MIN_ROZMIAR) nw = MIN_ROZMIAR;
+                        if(nh < MIN_ROZMIAR) nh = MIN_ROZMIAR;
+                        
+                        XMoveResizeWindow(dpy, valid_wins[i], nx, ny, nw, nh);
+                        XSetWindowBorderWidth(dpy, valid_wins[i], GRUBOSC_RAMKI);
+                        XRaiseWindow(dpy, valid_wins[i]);
+                    }
+                }
+            }
+            else if(base_ks == XK_q && (ev.xkey.state & ShiftMask)) break;
+            else if(base_ks == XF86XK_AudioRaiseVolume) system("v=$(amixer sset Master 5%+ | grep -m1 -oE '[0-9]+%') && xsetroot -name \" [ VOLUME: $v ] \" &");
+            else if(base_ks == XF86XK_AudioLowerVolume) system("v=$(amixer sset Master 5%- | grep -m1 -oE '[0-9]+%') && xsetroot -name \" [ VOLUME: $v ] \" &");
+            else if(base_ks == XF86XK_AudioMute) system("xsetroot -name \" [ AUDIO MUTED / UNMUTED ] \" && amixer sset Master toggle &");
+            else if(base_ks == XF86XK_MonBrightnessUp) system("b=$(brightnessctl set +5% | grep -m1 -oE '[0-9]+%') && xsetroot -name \" [ BRIGHTNESS: $b ] \" &");
+            else if(base_ks == XF86XK_MonBrightnessDown) system("b=$(brightnessctl set 5%- | grep -m1 -oE '[0-9]+%') && xsetroot -name \" [ BRIGHTNESS: $b ] \" &");
+            else if(base_ks == XK_q && ev.xkey.subwindow != None && ev.xkey.subwindow != bar) {
                 XEvent ke;
                 ke.type = ClientMessage;
                 ke.xclient.window = ev.xkey.subwindow;
@@ -150,18 +281,18 @@ int main(void) {
                 ke.xclient.data.l[1] = CurrentTime;
                 XSendEvent(dpy, ev.xkey.subwindow, False, NoEventMask, &ke);
             }
-            else if(ks == XK_f && (ev.xkey.state & ShiftMask) && ev.xkey.subwindow != None && ev.xkey.subwindow != bar) {
+            else if(base_ks == XK_f && (ev.xkey.state & ShiftMask) && ev.xkey.subwindow != None && ev.xkey.subwindow != bar) {
                 XMoveResizeWindow(dpy, ev.xkey.subwindow, 0, WYSOKOSC_PASKA, 
                                  DisplayWidth(dpy, screen), DisplayHeight(dpy, screen) - WYSOKOSC_PASKA);
                 XSetWindowBorderWidth(dpy, ev.xkey.subwindow, 0);
                 XRaiseWindow(dpy, ev.xkey.subwindow);
             }
-            else if(ks == XK_w && (ev.xkey.state & ShiftMask) && ev.xkey.subwindow != None && ev.xkey.subwindow != bar) {
+            else if(base_ks == XK_w && (ev.xkey.state & ShiftMask) && ev.xkey.subwindow != None && ev.xkey.subwindow != bar) {
                 XMoveResizeWindow(dpy, ev.xkey.subwindow, (DisplayWidth(dpy, screen)-800)/2, (DisplayHeight(dpy, screen)-600)/2, 800, 600);
                 XSetWindowBorderWidth(dpy, ev.xkey.subwindow, GRUBOSC_RAMKI);
                 XSetWindowBorder(dpy, ev.xkey.subwindow, KOLOR_FOCUS);
             }
-            else if(ks == XK_t) {
+            else if(base_ks == XK_t) {
                 if(fork() == 0) {
                     close(ConnectionNumber(dpy));
                     execlp(MOJ_TERMINAL, MOJ_TERMINAL, NULL);
@@ -170,15 +301,17 @@ int main(void) {
             }
         }
         else if(ev.type == ButtonPress && ev.xbutton.subwindow != None && ev.xbutton.subwindow != bar) {
-            XGetWindowAttributes(dpy, ev.xbutton.subwindow, &attr);
-            XSetInputFocus(dpy, ev.xbutton.subwindow, RevertToParent, CurrentTime);
-            XRaiseWindow(dpy, ev.xbutton.subwindow);
-            
-            if (attr.border_width > 0) { 
-                start = ev.xbutton; 
-                XSetWindowBorder(dpy, ev.xbutton.subwindow, KOLOR_FOCUS); 
-            } else { 
-                start.subwindow = None; 
+            if(ev.xbutton.subwindow != locked_window) {
+                XGetWindowAttributes(dpy, ev.xbutton.subwindow, &attr);
+                XSetInputFocus(dpy, ev.xbutton.subwindow, RevertToParent, CurrentTime);
+                XRaiseWindow(dpy, ev.xbutton.subwindow);
+                
+                if (attr.border_width > 0) { 
+                    start = ev.xbutton; 
+                    XSetWindowBorder(dpy, ev.xbutton.subwindow, KOLOR_FOCUS); 
+                } else { 
+                    start.subwindow = None; 
+                }
             }
         }
         else if(ev.type == MotionNotify && start.subwindow != None) {

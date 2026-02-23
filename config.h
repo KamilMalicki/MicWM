@@ -1,18 +1,23 @@
 // config.h - główny plik konfiguracyjny MicWM
 // Aby zastosować zmiany, zapisz plik i przebuduj menedżer (make && sudo make install)
 
+// --- KLAWISZ MODYFIKATORA ---
+// Mod1Mask = Alt
+// Mod4Mask = Super (klawisz Windows)
+#define MOD_KEY       Mod4Mask
+
 // --- WYGLĄD I KOLORY ---
-#define KOLOR_ZWYKLY  0x1f1f1f  // Kolor ramki nieaktywnego okna (HEX). Tu: ciemnoszary.
-#define KOLOR_FOCUS   0xffffff  // Kolor ramki aktywnego okna (tego pod myszką). Tu: czysty biały.
+#define KOLOR_ZWYKLY  0x1f1f1f  // Kolor ramki nieaktywnego okna (HEX)
+#define KOLOR_FOCUS   0xffffff  // Kolor ramki aktywnego okna (HEX)
 
 // --- WYMIARY ---
-#define GRUBOSC_RAMKI 4         // Grubość obramowania dookoła okien (w pikselach).
-#define MIN_ROZMIAR   10        // Minimalny rozmiar okna w pikselach (chroni przed crashem X11 przy maksymalnym zmniejszeniu).
+#define GRUBOSC_RAMKI 4         // Grubość obramowania
+#define MIN_ROZMIAR   10        // Minimalny rozmiar okna
 
 // --- PASEK STATUSU ---
-#define WYSOKOSC_PASKA 20       // Ile pikseli od góry ekranu zajmuje pasek statusu.
-#define TEKST_NA_PASKU " MicWM " // Tekst wyświetlany ułamek sekundy po starcie, zanim skrypt autostartu go nadpisze.
+#define WYSOKOSC_PASKA 20       // Wysokość paska w pikselach
+#define TEKST_NA_PASKU " MicWM " // Tekst startowy
 
 // --- APLIKACJE I SKRYPTY ---
-#define MOJ_TERMINAL "st"       // Domyślny emulator terminala odpalany skrótem Alt + T (np. "st", "xterm", "alacritty").
-#define AUTOSTART_SCRIPT "bash $HOME/.autoconfigscriptmicwm &" // Skrypt uruchamiany przy starcie (ładuje tapetę, pasek i inne programy w tle).
+#define MOJ_TERMINAL "st"       // Domyślny terminal
+#define AUTOSTART_SCRIPT "bash $HOME/.autoconfigscriptmicwm &" // Skrypt autostartu
