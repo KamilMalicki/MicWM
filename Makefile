@@ -1,46 +1,80 @@
-# Makefile dla mojego ultra-lekkiego gui
+#
+# Copyright [2026] [KamilMalicki]
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Compiler and Flags
+CC      = gcc
+CFLAGS  = -O2 -Wall -Wextra
+LIBS    = -lX11
+PREFIX  = /usr/local
+BINDIR  = $(DESTDIR)$(PREFIX)/bin
 
-CC = gcc
-CFLAGS = -O2 -Wall
-LIBS = -lX11
-PREFIX = /usr/local
-
-# czarna magia zeby znalezc prawdziwego uzytkownika (nawet jak odpala przez sudo)
+# Identify the real user if running via sudo
 REAL_USER = $(shell if [ -n "$$SUDO_USER" ]; then echo "$$SUDO_USER"; else echo "$$USER"; fi)
 REAL_HOME = $(shell getent passwd $(REAL_USER) | cut -d: -f6)
+SCRIPT_PATH = $(REAL_HOME)/.autoconfigscriptmicwm
 
+.PHONY: all clean install uninstall
+
+# Default target
 all: micwm
 
+# Compilation
 micwm: main.c config.h
-	$(CC) $(CFLAGS) main.c -o micwm $(LIBS)
+	@printf "  [ CC ]  $@\n"
+	$(CC) $(CFLAGS) main.c -o $@ $(LIBS)
 
+# Installation
 install: all
-	install -Dm755 micwm $(PREFIX)/bin/micwm
-	@echo "Sprawdzam skrypt autostartu..."
-	@if [ ! -f "$(REAL_HOME)/.autoconfigscriptmicwm" ]; then \
-		echo "#!/bin/bash" > "$(REAL_HOME)/.autoconfigscriptmicwm"; \
-		echo "" >> "$(REAL_HOME)/.autoconfigscriptmicwm"; \
-		echo "# Odkomentuj to i wpisz sciezke, zeby miec tapete (wymaga feh):" >> "$(REAL_HOME)/.autoconfigscriptmicwm"; \
-		echo "# feh --bg-scale /sciezka/do/twojej/tapety.jpg &" >> "$(REAL_HOME)/.autoconfigscriptmicwm"; \
-		echo "" >> "$(REAL_HOME)/.autoconfigscriptmicwm"; \
-		echo "# Dynamiczny pasek z RAMem i zegarem dla MicWM" >> "$(REAL_HOME)/.autoconfigscriptmicwm"; \
-		echo "while true; do" >> "$(REAL_HOME)/.autoconfigscriptmicwm"; \
-		echo "    RAM=\$$(free -m | awk '/Mem/ {print \$$3}')" >> "$(REAL_HOME)/.autoconfigscriptmicwm"; \
-		echo "    CZAS=\$$(date '+%H:%M:%S')" >> "$(REAL_HOME)/.autoconfigscriptmicwm"; \
-		echo "    xsetroot -name \" RAM: \$$RAM MB | Czas: \$$CZAS \"" >> "$(REAL_HOME)/.autoconfigscriptmicwm"; \
-		echo "    sleep 1" >> "$(REAL_HOME)/.autoconfigscriptmicwm"; \
-		echo "done &" >> "$(REAL_HOME)/.autoconfigscriptmicwm"; \
-		chown $(REAL_USER):$(REAL_USER) "$(REAL_HOME)/.autoconfigscriptmicwm"; \
-		chmod +x "$(REAL_HOME)/.autoconfigscriptmicwm"; \
-		echo "-> ZROBIONE! Stworzono gotowy skrypt w $(REAL_HOME)/.autoconfigscriptmicwm"; \
+	@printf "  [ INSTALL ]  Installing to $(BINDIR)\n"
+	install -Dm755 micwm $(BINDIR)/micwm
+	
+	@printf "  [ CONFIG ]   Checking autostart script...\n"
+	@if [ ! -f "$(SCRIPT_PATH)" ]; then \
+		printf "-> Creating default autostart script at $(SCRIPT_PATH)\n"; \
+		printf '%s\n' "$$AUTOSTART_CONTENT" > "$(SCRIPT_PATH)"; \
+		chown $(REAL_USER):$(REAL_USER) "$(SCRIPT_PATH)"; \
+		chmod +x "$(SCRIPT_PATH)"; \
 	else \
-		echo "-> Skrypt $(REAL_HOME)/.autoconfigscriptmicwm juz istnieje, zostawiam go w spokoju."; \
+		printf "-> Skrypt $(SCRIPT_PATH) already exists, skipping.\n"; \
 	fi
 
-uninstall:
-	rm -f $(PREFIX)/bin/micwm
-	@echo "-> MicWM usuniety z systemu."
-	@echo "-> UWAGA: Twoj skrypt $(REAL_HOME)/.autoconfigscriptmicwm zostal zachowany. Mozesz go usunac recznie."
+# Definition of the autostart script content
+define AUTOSTART_CONTENT
+#!/bin/bash
+# Autostart configuration for micwm
 
+# Uncomment to set wallpaper (requires feh)
+# feh --bg-scale /path/to/wallpaper.jpg &
+
+# Dynamic bar with RAM and clock
+while true; do
+    RAM=$$(free -m | awk '/Mem/ {print $$3}')
+    TIME=$$(date '+%H:%M:%S')
+    xsetroot -name " RAM: $$RAM MB | Time: $$TIME "
+    sleep 1
+done &
+endef
+export AUTOSTART_CONTENT
+
+# Cleanup
 clean:
+	@printf "  [ CLEAN ]  Removing binary\n"
 	rm -f micwm
+
+# Uninstallation
+uninstall:
+	@printf "  [ UNINSTALL ]  Removing binary from $(BINDIR)\n"
+	rm -f $(BINDIR)/micwm
+	@printf "  [ NOTE ]  Config file $(SCRIPT_PATH) preserved.\n"
