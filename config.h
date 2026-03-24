@@ -1,38 +1,25 @@
-/*
- * Copyright 2026 KamilMalicki
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-// config.h - główny plik konfiguracyjny MicWM
-// Aby zastosować zmiany, zapisz plik i przebuduj menedżer (make && sudo make install)
+// config.h - Main configuration file for MicWM
+// To apply changes, save the file and rebuild (make && sudo make install)
 
-// --- KLAWISZ MODYFIKATORA ---
+// --- MODIFIER KEY ---
 // Mod1Mask = Alt
-// Mod4Mask = Super (klawisz Windows)
+// Mod4Mask = Super (Windows Key)
 #define MOD_KEY       Mod4Mask
 
-// --- WYGLĄD I KOLORY ---
-#define KOLOR_ZWYKLY  0x1f1f1f  // Kolor ramki nieaktywnego okna (HEX)
-#define KOLOR_FOCUS   0xffffff  // Kolor ramki aktywnego okna (HEX)
+// --- APPEARANCE & COLORS ---
+#define KOLOR_ZWYKLY  0x1f1f1f  // Border color for inactive windows (HEX)
+#define KOLOR_FOCUS   0xffffff  // Border color for active window (HEX)
 
-// --- WYMIARY ---
-#define GRUBOSC_RAMKI 4         // Grubość obramowania
-#define MIN_ROZMIAR   10        // Minimalny rozmiar okna
+// --- DIMENSIONS ---
+#define GRUBOSC_RAMKI 4         // Border thickness in pixels
+#define MIN_ROZMIAR   10        // Minimum window size
 
-// --- PASEK STATUSU ---
-#define WYSOKOSC_PASKA 20       // Wysokość paska w pikselach
-#define TEKST_NA_PASKU " MicWM " // Tekst startowy
+// --- STATUS BAR ---
+#define WYSOKOSC_PASKA 20       // Bar height in pixels
+#define TEKST_NA_PASKU " MicWM " // Default status text
 
-// --- APLIKACJE I SKRYPTY ---
-#define MOJ_TERMINAL "st"       // Domyślny terminal
-#define AUTOSTART_SCRIPT "bash $HOME/.autoconfigscriptmicwm &" // Skrypt autostartu
+// --- APPLICATIONS & SCRIPTS ---
+#define MOJ_TERMINAL "st"       // Default terminal emulator
+#define AUTOSTART_SCRIPT "bash $HOME/.autoconfigscriptmicwm &" // Autostart script
+
+#define LANGUAGE "PL"

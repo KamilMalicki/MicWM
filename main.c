@@ -1,18 +1,3 @@
-/*
- * Copyright 2026 KamilMalicki
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/keysym.h>
@@ -24,11 +9,34 @@
 #include <unistd.h>
 #include <signal.h>
 #include <string.h>
+#include <locale.h>
 #include "config.h"
+
+typedef struct {
+    char *name;
+    char *prompt;
+} Lang;
+
+/* Language: PL, EN, TR, AR */
+Lang languages[] = {
+    {"PL", " URUCHOM: "},
+    {"EN", " RUN: "},
+    {"TR", " ÇALIŞTIR: "},
+    {"AR", " :تشغيل "} // troche naciągane bo nie jest od prawej do lewej // TODO
+};
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 int xerror(Display *dpy, XErrorEvent *ee) { return 0; }
+
+int cur_lang = 0; // na start jest polski
+
+void init_de_language() {
+    if (strcmp(LANGUAGE, "EN") == 0) cur_lang = 1;
+    else if (strcmp(LANGUAGE, "TR") == 0) cur_lang = 2;
+    else if (strcmp(LANGUAGE, "AR") == 0) cur_lang = 3;
+    else cur_lang = 0;  // na start jest polski
+}
 
 int main(void) {
     Display *dpy;
@@ -44,11 +52,27 @@ int main(void) {
     char prompt_buf[256] = "";
     int prompt_len = 0;
     Window locked_window = None;
-    
+
+    XFontSet fontset;
+    char **missing_charsets;
+    int missing_count;
+    char *def_string;
+
+    if(!(dpy = XOpenDisplay(NULL))) return 1;
+
+    //nowa czcionka
+    setlocale(LC_ALL, ""); 
+
+    fontset = XCreateFontSet(dpy, "-*-fixed-medium-r-normal-*-14-*-*-*-*-*-*-*,*",
+                            &missing_charsets, &missing_count, &def_string);
+
+    if (missing_count > 0) XFreeStringList(missing_charsets);
+
+    init_de_language();
+
     strncpy(status_text, TEKST_NA_PASKU, sizeof(status_text) - 1);
     signal(SIGCHLD, SIG_IGN);
 
-    if(!(dpy = XOpenDisplay(NULL))) return 1;
     XSetErrorHandler(xerror);
 
     int screen = DefaultScreen(dpy);
@@ -107,10 +131,12 @@ int main(void) {
             XClearWindow(dpy, bar);
             if(in_prompt) {
                 char temp[300];
-                snprintf(temp, sizeof(temp), " URUCHOM: %s_", prompt_buf);
-                XDrawString(dpy, bar, gc, 10, 14, temp, strlen(temp));
+                snprintf(temp, sizeof(temp), " %s: %s_", languages[cur_lang].prompt ,prompt_buf);
+                //XDrawString(dpy, bar, gc, 10, 14, temp, strlen(temp)); stare wyświetlanie
+                Xutf8DrawString(dpy, bar, fontset, gc, 10, 14, temp, strlen(temp));
             } else {
-                XDrawString(dpy, bar, gc, 10, 14, status_text, strlen(status_text));
+                Xutf8DrawString(dpy, bar, fontset, gc, 10, 14, status_text, strlen(status_text));
+                //XDrawString(dpy, bar, gc, 10, 14, status_text, strlen(status_text)); stare wyświetlanie
             }
         }
         else if(ev.type == PropertyNotify && ev.xproperty.window == root && ev.xproperty.atom == XA_WM_NAME) {
@@ -122,7 +148,8 @@ int main(void) {
             }
             if(!in_prompt) {
                 XClearWindow(dpy, bar);
-                XDrawString(dpy, bar, gc, 10, 14, status_text, strlen(status_text));
+                //XDrawString(dpy, bar, gc, 10, 14, status_text, strlen(status_text));
+                Xutf8DrawString(dpy, bar, fontset, gc, 10, 14, status_text, strlen(status_text));
             }
         }
         else if(ev.type == MapRequest) {
@@ -186,14 +213,16 @@ int main(void) {
                     prompt_buf[0] = '\0';
                     XUngrabKeyboard(dpy, CurrentTime);
                     XClearWindow(dpy, bar);
-                    XDrawString(dpy, bar, gc, 10, 14, status_text, strlen(status_text));
+                    //XDrawString(dpy, bar, gc, 10, 14, status_text, strlen(status_text));
+                    Xutf8DrawString(dpy, bar, fontset, gc, 10, 14, status_text, strlen(status_text));
                 } else if(ks == XK_Escape) {
                     in_prompt = 0;
                     prompt_len = 0;
                     prompt_buf[0] = '\0';
                     XUngrabKeyboard(dpy, CurrentTime);
                     XClearWindow(dpy, bar);
-                    XDrawString(dpy, bar, gc, 10, 14, status_text, strlen(status_text));
+                    //XDrawString(dpy, bar, gc, 10, 14, status_text, strlen(status_text));
+                    Xutf8DrawString(dpy, bar, fontset, gc, 10, 14, status_text, strlen(status_text));
                 } else if(ks == XK_BackSpace) {
                     if(prompt_len > 0) {
                         prompt_len--;
@@ -201,16 +230,19 @@ int main(void) {
                     }
                     XClearWindow(dpy, bar);
                     char temp[300];
-                    snprintf(temp, sizeof(temp), " URUCHOM: %s_", prompt_buf);
-                    XDrawString(dpy, bar, gc, 10, 14, temp, strlen(temp));
+                    snprintf(temp, sizeof(temp), " %s%s_", languages[cur_lang].prompt ,prompt_buf);
+
+                    Xutf8DrawString(dpy, bar, fontset, gc, 10, 14, temp, strlen(temp));
+                        //XDrawString(dpy, bar, gc, 10, 14, temp, strlen(temp)); stare wyświetlanie
                 } else if(klen > 0 && prompt_len + klen < sizeof(prompt_buf) - 1 && keybuf[0] >= 32 && keybuf[0] <= 126) {
                     strncpy(prompt_buf + prompt_len, keybuf, klen);
                     prompt_len += klen;
                     prompt_buf[prompt_len] = '\0';
                     XClearWindow(dpy, bar);
                     char temp[300];
-                    snprintf(temp, sizeof(temp), " URUCHOM: %s_", prompt_buf);
-                    XDrawString(dpy, bar, gc, 10, 14, temp, strlen(temp));
+                    snprintf(temp, sizeof(temp), " %s%s_",languages[cur_lang].prompt ,prompt_buf);
+                    // XDrawString(dpy, bar, gc, 10, 14, temp, strlen(temp)); stare wyświetlanie
+                    Xutf8DrawString(dpy, bar, fontset, gc, 10, 14, temp, strlen(temp));
                 }
                 continue;
             }
@@ -221,7 +253,10 @@ int main(void) {
                 prompt_buf[0] = '\0';
                 XGrabKeyboard(dpy, root, True, GrabModeAsync, GrabModeAsync, CurrentTime);
                 XClearWindow(dpy, bar);
-                XDrawString(dpy, bar, gc, 10, 14, " URUCHOM: _", 11);
+                char buf[128];
+                snprintf(buf, sizeof(buf), " %s_", languages[cur_lang].prompt);
+                //XDrawString(dpy, bar, gc, 10, 14, buf, strlen(buf));
+                Xutf8DrawString(dpy, bar, fontset, gc, 10, 14, buf, strlen(buf));
             }
             else if(base_ks == XK_d && (ev.xkey.state & MOD_KEY)) {
                 if (locked_window == None) {
