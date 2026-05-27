@@ -1,0 +1,1 @@
+xinit /usr/local/bin/micwm -- :1 vt3
