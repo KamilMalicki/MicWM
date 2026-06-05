@@ -13,6 +13,7 @@
 #include "config.h"
 
 typedef struct {
+<<<<<<< Updated upstream
     char *name;
     char *prompt;
 } Lang;
@@ -26,9 +27,27 @@ Lang languages[] = {
 };
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
+=======
+    Window win;
+    int tag;        // 1-9
+    int floating;
+    int fullscreen; // 1 = pełny ekran, 0 = normalny
+    int valid;      // 1 = active, 0 = pending removal
+} Client;
 
-int xerror(Display *dpy, XErrorEvent *ee) { return 0; }
+Client clients[MAX_CLIENTS];
+int client_count = 0;
+int gaps = 10; 
 
+Atom net_wm_window_type, net_wm_window_type_dock, net_current_desktop, net_active_window;
+int current_layout = 0;
+int active_tag = 1;
+double master_fact = 0.55;
+>>>>>>> Stashed changes
+
+int xerror(Display *dpy, XErrorEvent *ee) { (void)dpy; (void)ee; return 0; }
+
+<<<<<<< Updated upstream
 int cur_lang = 0; // na start jest polski
 
 void init_de_language() {
@@ -75,9 +94,276 @@ int main(void) {
 
     XSetErrorHandler(xerror);
 
-    int screen = DefaultScreen(dpy);
-    root = DefaultRootWindow(dpy);
+=======
+void spawn(const char *cmd) {
+    if (fork() == 0) {
+        setsid();
+        execl("/bin/sh", "sh", "-c", cmd, NULL);
+        exit(0);
+    }
+}
 
+Client *client_find(Window w) {
+    for (int i = 0; i < client_count; i++)
+        if (clients[i].valid && clients[i].win == w)
+            return &clients[i];
+    return NULL;
+}
+
+void client_add(Window w, int tag, int floating) {
+    if (client_find(w)) return;
+    if (client_count >= MAX_CLIENTS) return;
+    clients[client_count].win = w;
+    clients[client_count].tag = tag;
+    clients[client_count].floating = floating;
+    clients[client_count].fullscreen = 0;
+    clients[client_count].valid = 1;
+    client_count++;
+}
+
+void client_remove(Window w) {
+    for (int i = 0; i < client_count; i++) {
+        if (clients[i].win == w) {
+            clients[i].valid = 0;
+            for (int j = i; j < client_count - 1; j++) {
+                clients[j] = clients[j + 1];
+            }
+            client_count--;
+            break;
+        }
+    }
+}
+
+int is_dock(Display *dpy, Window w) {
+    Atom actual_type; int actual_format; unsigned long nitems, bytes_after;
+    unsigned char *prop = NULL;
+    int status = XGetWindowProperty(dpy, w, net_wm_window_type, 0, 1, False, XA_ATOM,
+                                    &actual_type, &actual_format, &nitems, &bytes_after, &prop);
+    if (status == Success && prop) {
+        Atom *atoms = (Atom *)prop;
+        for (unsigned long i = 0; i < nitems; i++) {
+            if (atoms[i] == net_wm_window_type_dock) { XFree(prop); return 1; }
+        }
+        XFree(prop);
+    }
+    return 0;
+}
+
+void setup_ewmh(Display *dpy, Window root) {
+    Atom net_supported = XInternAtom(dpy, "_NET_SUPPORTED", False);
+    Atom net_num = XInternAtom(dpy, "_NET_NUMBER_OF_DESKTOPS", False);
+    Atom supported[] = { net_num, net_current_desktop, net_active_window };
+    XChangeProperty(dpy, root, net_supported, XA_ATOM, 32, PropModeReplace, (unsigned char *)supported, 3);
+    long num_desktops = 9;
+    XChangeProperty(dpy, root, net_num, XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&num_desktops, 1);
+}
+
+void update_polybar_tags(Display *dpy, Window root) {
+    long cur_desktop = active_tag - 1;
+    XChangeProperty(dpy, root, net_current_desktop, XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&cur_desktop, 1);
+}
+
+void set_active_window(Display *dpy, Window root, Window w) {
+    if (w == None) XDeleteProperty(dpy, root, net_active_window);
+    else XChangeProperty(dpy, root, net_active_window, XA_WINDOW, 32, PropModeReplace, (unsigned char *)&w, 1);
+}
+
+void update_borders(Display *dpy, Window focused_win) {
+    for (int i = 0; i < client_count; i++) {
+        if (!clients[i].valid || clients[i].tag != active_tag) continue;
+        if (clients[i].fullscreen) continue;
+
+        if (clients[i].win == focused_win) {
+            XSetWindowBorder(dpy, clients[i].win, KOLOR_FOCUS);
+        } else {
+            XSetWindowBorder(dpy, clients[i].win, KOLOR_ZWYKLY);
+        }
+    }
+}
+
+// =============================================================
+// LAYOUT ENGINE (PROPER FULLSCREEN & TILES MIXER)
+// =============================================================
+void apply_layout(Display *dpy, int screen) {
+    int sw = DisplayWidth(dpy, screen);
+    int sh = DisplayHeight(dpy, screen);
+    int usable_h = sh - MARGINES_DOLNY;
+
+    // 1. Obsłuż okna na pełnym ekranie
+    for (int i = 0; i < client_count; i++) {
+        if (!clients[i].valid || clients[i].tag != active_tag) continue;
+        if (clients[i].fullscreen) {
+            XSetWindowBorderWidth(dpy, clients[i].win, 0);
+            XMoveResizeWindow(dpy, clients[i].win, 0, 0, sw, sh);
+            XRaiseWindow(dpy, clients[i].win);
+        }
+    }
+
+    // 2. Policz okna kafelkowe
+    int tiled_count = 0;
+    Window tiled[MAX_CLIENTS];
+    for (int i = 0; i < client_count; i++) {
+        if (!clients[i].valid || clients[i].tag != active_tag || clients[i].floating || clients[i].fullscreen) continue;
+        tiled[tiled_count++] = clients[i].win;
+    }
+
+    if (tiled_count == 0) return;
+
+    // 3. Pozycjonuj kafelki
+    for (int i = 0; i < tiled_count; i++) {
+        int nx = 0, ny = 0, nw = sw, nh = usable_h;
+
+        if (current_layout == 0) { // Master-Stack
+            if (tiled_count == 1) {
+                nx = 0; ny = 0; nw = sw; nh = usable_h;
+            } else if (i == 0) {
+                nx = 0; ny = 0; nw = (int)(sw * master_fact); nh = usable_h;
+            } else {
+                int sc = tiled_count - 1;
+                nx = (int)(sw * master_fact); nw = sw - nx;
+                nh = usable_h / sc; ny = (i - 1) * nh;
+                if (i == tiled_count - 1) nh = usable_h - ny;
+            }
+        } else if (current_layout == 1) { // Grid
+            int rows = 1, cols = 1;
+            while (rows * cols < tiled_count) { if (cols == rows) cols++; else rows++; }
+            int r = i / cols; int c = i % cols;
+            nw = sw / cols; nh = usable_h / rows; nx = c * nw; ny = r * nh;
+        }
+
+        nx += gaps; ny += gaps; nw -= 2 * gaps; nh -= 2 * gaps;
+        nw -= 2 * GRUBOSC_RAMKI; nh -= 2 * GRUBOSC_RAMKI;
+        if (nw < MIN_ROZMIAR) nw = MIN_ROZMIAR;
+        if (nh < MIN_ROZMIAR) nh = MIN_ROZMIAR;
+
+        XSetWindowBorderWidth(dpy, tiled[i], GRUBOSC_RAMKI);
+        XMoveResizeWindow(dpy, tiled[i], nx, ny, nw, nh);
+    }
+}
+
+void focus_fallback(Display *dpy, Window root) {
+    Window first_valid = None;
+    for (int i = 0; i < client_count; i++) {
+        if (clients[i].valid && clients[i].tag == active_tag) {
+            first_valid = clients[i].win;
+            break;
+        }
+    }
+    if (first_valid != None) {
+        XSetInputFocus(dpy, first_valid, RevertToParent, CurrentTime);
+        set_active_window(dpy, root, first_valid);
+        update_borders(dpy, first_valid);
+    } else {
+        XSetInputFocus(dpy, root, RevertToParent, CurrentTime);
+        set_active_window(dpy, root, None);
+    }
+}
+
+// =============================================================
+// INTERACTIVE ACTIONS & WORKSPACE SWITCHING
+// =============================================================
+void view_tag(Display *dpy, int screen, int tag) {
+    if (tag < 1 || tag > 9) return;
+    active_tag = tag;
+    
+    Window root = DefaultRootWindow(dpy);
+    update_polybar_tags(dpy, root);
+
+    int sw = DisplayWidth(dpy, screen);
+    int sh = DisplayHeight(dpy, screen);
+
+    for (int i = 0; i < client_count; i++) {
+        if (!clients[i].valid) continue;
+        if (clients[i].tag == active_tag) {
+            XMapWindow(dpy, clients[i].win);
+        } else {
+            // Bezpieczne ukrywanie okien bez zrywania focusu systemowego
+            XMoveWindow(dpy, clients[i].win, sw * 2, sh * 2);
+        }
+    }
+
+    apply_layout(dpy, screen);
+    focus_fallback(dpy, root);
+    XFlush(dpy);
+}
+
+void tag_window(Display *dpy, int screen, Window w, int tag) {
+    Client *c = client_find(w);
+    if (!c || tag < 1 || tag > 9) return;
+    c->tag = tag;
+
+    int sw = DisplayWidth(dpy, screen);
+    int sh = DisplayHeight(dpy, screen);
+    if (tag != active_tag) XMoveWindow(dpy, w, sw * 2, sh * 2);
+
+    apply_layout(dpy, screen);
+    focus_fallback(dpy, DefaultRootWindow(dpy));
+}
+
+void toggle_fullscreen(Display *dpy, int screen) {
+    Window focused; int revert_to;
+    XGetInputFocus(dpy, &focused, &revert_to);
+    
+    // Jeśli focus jest pusty, szukamy pierwszego okna na obecnym tagu
+    if (focused == None || focused == DefaultRootWindow(dpy)) {
+        for (int i = 0; i < client_count; i++) {
+            if (clients[i].valid && clients[i].tag == active_tag) {
+                focused = clients[i].win;
+                break;
+            }
+        }
+    }
+
+    Client *c = client_find(focused);
+    if (!c) return;
+
+    c->fullscreen = !c->fullscreen;
+    
+    if (!c->fullscreen) {
+        XSetWindowBorderWidth(dpy, focused, GRUBOSC_RAMKI);
+    }
+    
+    apply_layout(dpy, screen);
+    XSetInputFocus(dpy, focused, RevertToParent, CurrentTime);
+    set_active_window(dpy, DefaultRootWindow(dpy), focused);
+    update_borders(dpy, focused);
+}
+
+void focus_stack(Display *dpy, int dir) {
+    Window wins[MAX_CLIENTS]; int cnt = 0; int cur = -1;
+    Window focused; int revert_to;
+    XGetInputFocus(dpy, &focused, &revert_to);
+
+    for (int i = 0; i < client_count; i++) {
+        if (!clients[i].valid || clients[i].tag != active_tag) continue;
+        wins[cnt] = clients[i].win;
+        if (clients[i].win == focused) cur = cnt;
+        cnt++;
+    }
+    if (cnt <= 1) return;
+
+    int next = 0;
+    if (cur != -1) next = (cur + dir + cnt) % cnt;
+
+    XSetInputFocus(dpy, wins[next], RevertToParent, CurrentTime);
+    update_borders(dpy, wins[next]);
+    XRaiseWindow(dpy, wins[next]);
+    set_active_window(dpy, DefaultRootWindow(dpy), wins[next]);
+}
+
+// =============================================================
+// MAIN INITIALIZATION & EVENT LOOP
+// =============================================================
+int main(void) {
+    Display *dpy = XOpenDisplay(NULL);
+    if (!dpy) return 1;
+
+>>>>>>> Stashed changes
+    int screen = DefaultScreen(dpy);
+    Window root = DefaultRootWindow(dpy);
+    XWindowAttributes attr; XButtonEvent start; XEvent ev;
+
+<<<<<<< Updated upstream
     wm_protocols = XInternAtom(dpy, "WM_PROTOCOLS", False);
     wm_delete_window = XInternAtom(dpy, "WM_DELETE_WINDOW", False);
 
@@ -120,6 +406,49 @@ int main(void) {
 
     start.subwindow = None;
     start.button = 0;
+=======
+    XSetErrorHandler(xerror);
+    net_wm_window_type = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE", False);
+    net_wm_window_type_dock = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_DOCK", False);
+    net_current_desktop = XInternAtom(dpy, "_NET_CURRENT_DESKTOP", False);
+    net_active_window = XInternAtom(dpy, "_NET_ACTIVE_WINDOW", False);
+
+    setup_ewmh(dpy, root);
+    XDefineCursor(dpy, root, XCreateFontCursor(dpy, XC_left_ptr));
+    
+    // SubstructureRedirectMask jest krytyczny, by przechwycić kliknięcia w Polybara
+    XSelectInput(dpy, root, SubstructureRedirectMask | SubstructureNotifyMask | PropertyChangeMask | EnterWindowMask);
+    update_polybar_tags(dpy, root);
+
+    // Rejestracja klawiszy
+    XGrabKey(dpy, XKeysymToKeycode(dpy, KLUCZ_TERMINAL), MOD_KEY, root, False, GrabModeAsync, GrabModeAsync);
+    XGrabKey(dpy, XKeysymToKeycode(dpy, KLUCZ_LAUNCHER), MOD_KEY, root, False, GrabModeAsync, GrabModeAsync);
+    XGrabKey(dpy, XKeysymToKeycode(dpy, KLUCZ_ZAMKNIJ), MOD_KEY, root, False, GrabModeAsync, GrabModeAsync);
+    XGrabKey(dpy, XKeysymToKeycode(dpy, KLUCZ_LAYOUT), MOD_KEY, root, False, GrabModeAsync, GrabModeAsync);
+    XGrabKey(dpy, XKeysymToKeycode(dpy, KLUCZ_FOCUS_NEXT), MOD_KEY, root, False, GrabModeAsync, GrabModeAsync);
+    XGrabKey(dpy, XKeysymToKeycode(dpy, KLUCZ_FOCUS_PREV), MOD_KEY, root, False, GrabModeAsync, GrabModeAsync);
+    XGrabKey(dpy, XKeysymToKeycode(dpy, KLUCZ_GAPS_PLUS), MOD_KEY, root, False, GrabModeAsync, GrabModeAsync);
+    XGrabKey(dpy, XKeysymToKeycode(dpy, KLUCZ_GAPS_MINUS), MOD_KEY, root, False, GrabModeAsync, GrabModeAsync);
+    XGrabKey(dpy, XKeysymToKeycode(dpy, KLUCZ_FLOATING), MOD_KEY, root, False, GrabModeAsync, GrabModeAsync);
+    
+    XGrabKey(dpy, XKeysymToKeycode(dpy, KLUCZ_MAKSYMALIZUJ), MOD_KEY | ShiftMask, root, False, GrabModeAsync, GrabModeAsync);
+    XGrabKey(dpy, XKeysymToKeycode(dpy, KLUCZ_MASTER_MINUS), MOD_KEY | ShiftMask, root, False, GrabModeAsync, GrabModeAsync);
+    XGrabKey(dpy, XKeysymToKeycode(dpy, KLUCZ_MASTER_PLUS), MOD_KEY | ShiftMask, root, False, GrabModeAsync, GrabModeAsync);
+    XGrabKey(dpy, XKeysymToKeycode(dpy, KLUCZ_RESTART), MOD_KEY | ShiftMask, root, False, GrabModeAsync, GrabModeAsync);
+    XGrabKey(dpy, XKeysymToKeycode(dpy, KLUCZ_ROZMIAR_W), MOD_KEY | ShiftMask, root, False, GrabModeAsync, GrabModeAsync);
+    XGrabKey(dpy, XKeysymToKeycode(dpy, KLUCZ_POMOCY), MOD_KEY | ShiftMask, root, False, GrabModeAsync, GrabModeAsync);
+
+    for (int i = 0; i < 9; i++) {
+        XGrabKey(dpy, XKeysymToKeycode(dpy, XK_1 + i), MOD_KEY, root, False, GrabModeAsync, GrabModeAsync);
+        XGrabKey(dpy, XKeysymToKeycode(dpy, XK_1 + i), MOD_KEY | ShiftMask, root, False, GrabModeAsync, GrabModeAsync);
+    }
+
+    XGrabButton(dpy, 1, MOD_KEY, root, True, ButtonPressMask | PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
+    XGrabButton(dpy, 3, MOD_KEY, root, True, ButtonPressMask | PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
+
+    start.subwindow = None;
+    spawn(AUTOSTART_SCRIPT);
+>>>>>>> Stashed changes
 
     if(system(AUTOSTART_SCRIPT)) {}
 
@@ -127,6 +456,7 @@ int main(void) {
         XNextEvent(dpy, &ev);
         XRaiseWindow(dpy, bar);
 
+<<<<<<< Updated upstream
         if(ev.type == Expose && ev.xexpose.window == bar) {
             XClearWindow(dpy, bar);
             if(in_prompt) {
@@ -363,10 +693,61 @@ int main(void) {
                     start.subwindow = None; 
                 }
             }
+=======
+        if (ev.type == MapRequest) {
+            Window w = ev.xmaprequest.window;
+            if (is_dock(dpy, w)) { XMapRaised(dpy, w); continue; }
+
+            client_add(w, active_tag, 0);
+            XSetWindowBorderWidth(dpy, w, GRUBOSC_RAMKI);
+            XMapWindow(dpy, w);
+            XSelectInput(dpy, w, EnterWindowMask);
+            
+            XSetInputFocus(dpy, w, RevertToParent, CurrentTime);
+            apply_layout(dpy, screen);
+            update_borders(dpy, w);
+            set_active_window(dpy, root, w);
+        }
+        else if (ev.type == DestroyNotify || ev.type == UnmapNotify) {
+            Window w = (ev.type == DestroyNotify) ? ev.xdestroywindow.window : ev.xunmap.window;
+            if (client_find(w)) {
+                client_remove(w);
+                apply_layout(dpy, screen);
+                focus_fallback(dpy, root);
+            }
+        }
+        else if (ev.type == ClientMessage) {
+            // KLUCZOWE: Polybar wysyła to zdarzenie przy kliknięciu myszą w tag.
+            // Teraz poprawnie wywołujemy pełną funkcję przekierowania view_tag()!
+            if (ev.xclient.message_type == net_current_desktop) {
+                int target_tag = ev.xclient.data.l[0] + 1;
+                view_tag(dpy, screen, target_tag);
+            }
+        }
+        else if (ev.type == EnterNotify) {
+            if (ev.xcrossing.window != root && !is_dock(dpy, ev.xcrossing.window)) {
+                Client *c = client_find(ev.xcrossing.window);
+                if (c && c->tag == active_tag) {
+                    XSetInputFocus(dpy, ev.xcrossing.window, RevertToParent, CurrentTime);
+                    update_borders(dpy, ev.xcrossing.window);
+                    set_active_window(dpy, root, ev.xcrossing.window);
+                }
+            }
+        }
+        else if (ev.type == ButtonPress && ev.xbutton.subwindow != None) {
+            if (is_dock(dpy, ev.xbutton.subwindow)) continue;
+            XGetWindowAttributes(dpy, ev.xbutton.subwindow, &attr);
+            XSetInputFocus(dpy, ev.xbutton.subwindow, RevertToParent, CurrentTime);
+            set_active_window(dpy, root, ev.xbutton.subwindow);
+            XRaiseWindow(dpy, ev.xbutton.subwindow);
+            start = ev.xbutton;
+            update_borders(dpy, ev.xbutton.subwindow);
+>>>>>>> Stashed changes
         }
         else if(ev.type == MotionNotify && start.subwindow != None) {
             int xdiff = ev.xbutton.x_root - start.x_root;
             int ydiff = ev.xbutton.y_root - start.y_root;
+<<<<<<< Updated upstream
             
             int nx = attr.x + (start.button == 1 ? xdiff : 0);
             int ny = attr.y + (start.button == 1 ? ydiff : 0);
@@ -382,12 +763,60 @@ int main(void) {
         }
         else if(ev.type == ButtonRelease && start.subwindow != None) {
             XSetWindowBorder(dpy, start.subwindow, KOLOR_ZWYKLY);
+=======
+            Client *c = client_find(start.subwindow);
+            if (c) c->floating = 1;
+
+            if (start.button == 1) XMoveWindow(dpy, start.subwindow, attr.x + xdiff, attr.y + ydiff);
+            else if (start.button == 3) XResizeWindow(dpy, start.subwindow, MAX(MIN_ROZMIAR, attr.width + xdiff), MAX(MIN_ROZMIAR, attr.height + ydiff));
+        }
+        else if (ev.type == ButtonRelease) {
+>>>>>>> Stashed changes
             start.subwindow = None;
         }
-    }
+        else if (ev.type == KeyPress) {
+            KeySym keysym = XLookupKeysym(&ev.xkey, 0);
+            int state = ev.xkey.state;
 
+<<<<<<< Updated upstream
     XFreeGC(dpy, gc);
     XFreeCursor(dpy, cursor);
+=======
+            if (keysym >= XK_1 && keysym <= XK_9) {
+                int tag = keysym - XK_1 + 1;
+                if (state & ShiftMask) {
+                    Window focused; int rev; XGetInputFocus(dpy, &focused, &rev);
+                    tag_window(dpy, screen, focused, tag);
+                } else {
+                    view_tag(dpy, screen, tag);
+                }
+            }
+            else if (keysym == KLUCZ_TERMINAL) spawn(MOJ_TERMINAL);
+            else if (keysym == KLUCZ_LAUNCHER) spawn(MOJ_LAUNCHER);
+            else if (keysym == KLUCZ_LAYOUT) { current_layout = !current_layout; apply_layout(dpy, screen); }
+            else if (keysym == KLUCZ_FOCUS_NEXT) focus_stack(dpy, 1);
+            else if (keysym == KLUCZ_FOCUS_PREV) focus_stack(dpy, -1);
+            else if (keysym == KLUCZ_MAKSYMALIZUJ) toggle_fullscreen(dpy, screen);
+            else if (keysym == KLUCZ_GAPS_PLUS) { gaps += 2; apply_layout(dpy, screen); }
+            else if (keysym == KLUCZ_GAPS_MINUS) { gaps -= 2; if (gaps < 0) gaps = 0; apply_layout(dpy, screen); }
+            else if (keysym == KLUCZ_ZAMKNIJ) {
+                Window focused; int rev; XGetInputFocus(dpy, &focused, &rev);
+                if (focused != root && focused != None && !is_dock(dpy, focused)) XKillClient(dpy, focused);
+            }
+            else if (keysym == KLUCZ_FLOATING) {
+                Window focused; int rev; XGetInputFocus(dpy, &focused, &rev);
+                Client *c = client_find(focused);
+                if (c) { c->floating = !c->floating; apply_layout(dpy, screen); update_borders(dpy, focused); }
+            }
+            else if (keysym == KLUCZ_RESTART) {
+                XCloseDisplay(dpy);
+                char *args[] = { "/usr/local/bin/micwm", NULL };
+                execv(args[0], args);
+                return 0;
+            }
+        }
+    }
+>>>>>>> Stashed changes
     XCloseDisplay(dpy);
     return 0;
 }
