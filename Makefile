@@ -3,7 +3,6 @@
 # Reference Standard: IEEE Std 1003.1-2017 (POSIX.1)
 # ==============================================================================
 
-# Custom overriding of standard POSIX utilities (Compiler independent)
 CC       ?= gcc
 CFLAGS   ?= -O3 -march=native -pipe -Wall -Wextra -pedantic
 CPPFLAGS ?= -D_POSIX_C_SOURCE=200809L
@@ -11,7 +10,6 @@ LDFLAGS  ?=
 LIBS     = -lX11
 PREFIX   ?= /usr/local
 
-# Detekcja użytkownika i jego katalogu domowego
 REAL_USER = $(shell if [ -n "$$SUDO_USER" ]; then echo "$$SUDO_USER"; else echo "$$USER"; fi)
 REAL_HOME = $(shell getent passwd $(REAL_USER) | cut -d: -f6)
 
@@ -19,7 +17,6 @@ REAL_HOME = $(shell getent passwd $(REAL_USER) | cut -d: -f6)
 
 all: micwm
 
-# Standardowa linia kompilacji: Preprocesor -> CFlags -> Linker
 micwm: main.c config.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) main.c -o micwm $(LIBS)
 
