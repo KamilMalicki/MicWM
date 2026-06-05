@@ -1,25 +1,45 @@
-// config.h - Main configuration file for MicWM
-// To apply changes, save the file and rebuild (make && sudo make install)
+/* config.h */
+#ifndef CONFIG_H
+#define CONFIG_H
 
-// --- MODIFIER KEY ---
-// Mod1Mask = Alt
-// Mod4Mask = Super (Windows Key)
-#define MOD_KEY       Mod4Mask
+#include <X11/Xlib.h>
+#include <X11/keysym.h>
 
-// --- APPEARANCE & COLORS ---
-#define KOLOR_ZWYKLY  0x1f1f1f  // Border color for inactive windows (HEX)
-#define KOLOR_FOCUS   0xffffff  // Border color for active window (HEX)
+/* --- Modifier Key --- */
+#define MOD_KEY              Mod4Mask        /* Klawisz Super / Windows */
 
-// --- DIMENSIONS ---
-#define GRUBOSC_RAMKI 4         // Border thickness in pixels
-#define MIN_ROZMIAR   10        // Minimum window size
+/* --- Appearance & Styling --- */
+#define GRUBOSC_RAMKI        2               
+#define MIN_ROZMIAR          10              
+#define MARGINES_DOLNY       35              /* Miejsce zarezerwowane na Polybara */
+#define KOLOR_ZWYKLY         0x282c34        
+#define KOLOR_FOCUS          0x61afef        
 
-// --- STATUS BAR ---
-#define WYSOKOSC_PASKA 20       // Bar height in pixels
-#define TEKST_NA_PASKU " MicWM " // Default status text
+/* --- Core Applications & Autostart --- */
+#define MOJ_TERMINAL         "alacritty"
+#define MOJ_LAUNCHER         "dmenu_run"
+#define MOJ_SCREENSHOT       "maim ~/screenshot-$(date +%s).png"
+#define AUTOSTART_SCRIPT     "bash $HOME/.autoconfigscriptmicwm"
+#define POLECENIE_POMOCY     "echo 'Pomoc'"
 
-// --- APPLICATIONS & SCRIPTS ---
-#define MOJ_TERMINAL "st"       // Default terminal emulator
-#define AUTOSTART_SCRIPT "bash $HOME/.autoconfigscriptmicwm &" // Autostart script
+/* --- Keybindings Configuration --- */
+#define KLUCZ_TERMINAL       XK_Return       
+#define KLUCZ_LAUNCHER       XK_p            
+#define KLUCZ_ZAMKNIJ        XK_q            
+#define KLUCZ_LAYOUT         XK_s            
+#define KLUCZ_SCREENSHOT     XK_s            
+#define KLUCZ_PRINT_SCREEN   XK_Print        
+#define KLUCZ_LOCK_FOCUS     XK_d            
+#define KLUCZ_FLOATING       XK_space        
+#define KLUCZ_FOCUS_NEXT     XK_j            
+#define KLUCZ_FOCUS_PREV     XK_k            
+#define KLUCZ_MASTER_MINUS   XK_h            
+#define KLUCZ_MASTER_PLUS    XK_l            
+#define KLUCZ_RESTART        XK_r            
+#define KLUCZ_MAKSYMALIZUJ   XK_f            
+#define KLUCZ_ROZMIAR_W      XK_w            
+#define KLUCZ_GAPS_PLUS      XK_equal        
+#define KLUCZ_GAPS_MINUS     XK_minus        
+#define KLUCZ_POMOCY         XK_u            
 
-#define LANGUAGE "PL"
+#endif
