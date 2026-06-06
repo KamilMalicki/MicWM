@@ -109,19 +109,48 @@ void set_active_window(Display *dpy, Window root, Window w) {
     }
 }
 
+void get_window_hints(Display *dpy, Window w, int screen, int *pref_w, int *pref_h) {
+    XSizeHints hints;
+    long supplied;
+    
+    *pref_w = 800;
+    *pref_h = 600;
+
+    if (XGetWMNormalHints(dpy, w, &hints, &supplied)) {
+        if ((hints.flags & PSize) || (hints.flags & USSize)) {
+            *pref_w = hints.width;
+            *pref_h = hints.height;
+        }
+        else if (hints.flags & PBaseSize) {
+            *pref_w = hints.base_width;
+            *pref_h = hints.base_height;
+        }
+    }
+}
+
 int is_fullscreen_or_util(Display *dpy, Window w, int screen) {
     XWindowAttributes wa;
     if (XGetWindowAttributes(dpy, w, &wa)) {
-        if (wa.width >= DisplayWidth(dpy, screen) && wa.height >= (DisplayHeight(dpy, screen) - MARGINES_GORNY)) return 1;
+        if (wa.width >= DisplayWidth(dpy, screen) && wa.height >= (DisplayHeight(dpy, screen) - MARGINES_GORNY)) 
+            return 1;
+        
+        if (wa.width < (DisplayWidth(dpy, screen) * 0.7) && wa.height < (DisplayHeight(dpy, screen) * 0.7)) 
+            return 1; 
+        
     }
 
     XClassHint ch;
     if (XGetClassHint(dpy, w, &ch)) {
-        if (ch.res_name && strcmp(ch.res_name, "feh") == 0) {
-            XFree(ch.res_name); if (ch.res_class) XFree(ch.res_class);
-            return 1; 
+        if (ch.res_name) {
+            if (strcmp(ch.res_name, "feh") == 0 || 
+                strcmp(ch.res_name, "kcalc") == 0 || 
+                strcmp(ch.res_name, "gnome-calculator") == 0 ||
+                strcmp(ch.res_name, "galculator") == 0) {
+                XFree(ch.res_name); if (ch.res_class) XFree(ch.res_class);
+                return 1; 
+            }
+            XFree(ch.res_name);
         }
-        if (ch.res_name) XFree(ch.res_name);
         if (ch.res_class) XFree(ch.res_class);
     }
 
@@ -145,7 +174,6 @@ int is_fullscreen_or_util(Display *dpy, Window w, int screen) {
     if (XGetTransientForHint(dpy, w, &trans)) return 1;
     return 0;
 }
-
 // =============================================================
 // LAYOUT & FOCUS MANAGMENT
 // =============================================================
@@ -344,9 +372,25 @@ int main(void) {
                 XMoveResizeWindow(dpy, ev.xmaprequest.window, (sw - 750) / 2, MARGINES_GORNY + (sh - 600) / 2, 750, 600);
                 XSetWindowBorderWidth(dpy, ev.xmaprequest.window, 1);
             }
-            else if (should_float && wa.width >= DisplayWidth(dpy, screen)) {
-                XMoveResizeWindow(dpy, ev.xmaprequest.window, 0, MARGINES_GORNY, DisplayWidth(dpy, screen), DisplayHeight(dpy, screen) - MARGINES_GORNY);
-                XSetWindowBorderWidth(dpy, ev.xmaprequest.window, 0);
+            else if (should_float) {
+                int pref_w = wa.width;
+                int pref_h = wa.height;
+
+                if (pref_w <= 0 || pref_w >= DisplayWidth(dpy, screen)) 
+                    get_window_hints(dpy, ev.xmaprequest.window, screen, &pref_w, &pref_h);
+                
+
+                int sw = DisplayWidth(dpy, screen);
+                int sh = DisplayHeight(dpy, screen) - MARGINES_GORNY;
+
+                if (pref_w > sw) pref_w = sw - (2 * GRUBOSC_RAMKI);
+                if (pref_h > sh) pref_h = sh - (2 * GRUBOSC_RAMKI);
+
+                int nx = (sw - pref_w) / 2;
+                int ny = MARGINES_GORNY + (sh - pref_h) / 2;
+
+                XMoveResizeWindow(dpy, ev.xmaprequest.window, nx, ny, pref_w, pref_h);
+                XSetWindowBorderWidth(dpy, ev.xmaprequest.window, GRUBOSC_RAMKI);
             } else {
                 XSetWindowBackground(dpy, ev.xmaprequest.window, KOLOR_ZWYKLY);
                 XClearWindow(dpy, ev.xmaprequest.window);
