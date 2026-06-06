@@ -11,7 +11,7 @@
 /* --- Appearance & Styling --- */
 #define GRUBOSC_RAMKI        2               
 #define MIN_ROZMIAR          10              
-#define MARGINES_DOLNY       35              /* Miejsce zarezerwowane na Polybara */
+#define MARGINES_GORNY       35            
 #define KOLOR_ZWYKLY         0x282c34        
 #define KOLOR_FOCUS          0x61afef        
 
