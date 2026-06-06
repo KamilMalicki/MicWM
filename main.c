@@ -19,7 +19,6 @@
 // =============================================================
 typedef struct {
     Window win;
-    int tag;        // 1-9
     int floating;
     int valid;      // 1 = active, 0 = pending removal
 } Client;
@@ -29,9 +28,8 @@ int client_count = 0;
 
 int gaps = 10; 
 
-Atom net_wm_window_type, net_wm_window_type_dock, net_current_desktop, net_active_window;
+Atom net_wm_window_type, net_wm_window_type_dock, net_active_window;
 int current_layout = 0;
-int active_tag = 1;
 double master_fact = 0.55;
 
 int xerror(Display *dpy, XErrorEvent *ee) { return 0; }
@@ -52,12 +50,11 @@ Client *client_find(Window w) {
     return NULL;
 }
 
-Client *client_add(Window w, int tag, int floating) {
+Client *client_add(Window w, int floating) {
     Client *existing = client_find(w);
     if (existing) return existing;
     if (client_count >= MAX_CLIENTS) return NULL;
     clients[client_count].win = w;
-    clients[client_count].tag = tag;
     clients[client_count].floating = floating;
     clients[client_count].valid = 1;
     return &clients[client_count++];
@@ -98,31 +95,10 @@ int is_help_window(Display *dpy, Window w) {
 
 void setup_ewmh(Display *dpy, Window root) {
     Atom net_supported = XInternAtom(dpy, "_NET_SUPPORTED", False);
-    Atom net_num = XInternAtom(dpy, "_NET_NUMBER_OF_DESKTOPS", False);
-    Atom net_wm_desktop = XInternAtom(dpy, "_NET_WM_DESKTOP", False);
-    Atom net_names = XInternAtom(dpy, "_NET_DESKTOP_NAMES", False);
-    net_current_desktop = XInternAtom(dpy, "_NET_CURRENT_DESKTOP", False);
     net_active_window = XInternAtom(dpy, "_NET_ACTIVE_WINDOW", False);
 
-    Atom supported[] = { net_num, net_current_desktop, net_wm_desktop, net_names, net_active_window };
-    XChangeProperty(dpy, root, net_supported, XA_ATOM, 32, PropModeReplace, (unsigned char *)supported, 5);
-
-    long num_desktops = 9;
-    XChangeProperty(dpy, root, net_num, XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&num_desktops, 1);
-
-    char names[] = "1\0" "2\0" "3\0" "4\0" "5\0" "6\0" "7\0" "8\0" "9\0";
-    XChangeProperty(dpy, root, net_names, XInternAtom(dpy, "UTF8_STRING", False), 8, PropModeReplace, (unsigned char *)names, 18);
-}
-
-void set_net_wm_desktop(Display *dpy, Window w, int tag) {
-    Atom net_wm_desktop = XInternAtom(dpy, "_NET_WM_DESKTOP", False);
-    long ewmh_desktop = tag - 1;
-    XChangeProperty(dpy, w, net_wm_desktop, XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&ewmh_desktop, 1);
-}
-
-void update_polybar_tags(Display *dpy, Window root) {
-    long cur_desktop = active_tag - 1;
-    XChangeProperty(dpy, root, net_current_desktop, XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&cur_desktop, 1);
+    Atom supported[] = { net_active_window };
+    XChangeProperty(dpy, root, net_supported, XA_ATOM, 32, PropModeReplace, (unsigned char *)supported, 1);
 }
 
 void set_active_window(Display *dpy, Window root, Window w) {
@@ -136,9 +112,8 @@ void set_active_window(Display *dpy, Window root, Window w) {
 int is_fullscreen_or_util(Display *dpy, Window w, int screen) {
     XWindowAttributes wa;
     if (XGetWindowAttributes(dpy, w, &wa)) {
-        if (wa.width >= DisplayWidth(dpy, screen) && wa.height >= (DisplayHeight(dpy, screen) - MARGINES_DOLNY)) return 1;
+        if (wa.width >= DisplayWidth(dpy, screen) && wa.height >= (DisplayHeight(dpy, screen) - MARGINES_GORNY)) return 1;
     }
-
 
     XClassHint ch;
     if (XGetClassHint(dpy, w, &ch)) {
@@ -149,7 +124,6 @@ int is_fullscreen_or_util(Display *dpy, Window w, int screen) {
         if (ch.res_name) XFree(ch.res_name);
         if (ch.res_class) XFree(ch.res_class);
     }
-
 
     Atom actual_type; int actual_format; unsigned long nitems, bytes_after;
     unsigned char *prop = NULL;
@@ -181,7 +155,6 @@ void apply_layout(Display *dpy, int screen) {
 
     for (int i = 0; i < client_count; i++) {
         if (!clients[i].valid) continue;
-        if (clients[i].tag != active_tag) continue;
         if (clients[i].floating) continue;
         if (tiled_count < MAX_CLIENTS)
             tiled[tiled_count++] = clients[i].win;
@@ -191,27 +164,27 @@ void apply_layout(Display *dpy, int screen) {
 
     int sw = DisplayWidth(dpy, screen);
     int sh = DisplayHeight(dpy, screen);
-    int usable_h = sh - MARGINES_DOLNY;
+    int usable_h = sh - MARGINES_GORNY;
 
     for (int i = 0; i < tiled_count; i++) {
-        int nx = 0, ny = 0, nw = sw, nh = usable_h;
+        int nx = 0, ny = MARGINES_GORNY, nw = sw, nh = usable_h;
 
         if (current_layout == 0) { // Master-Stack
             if (tiled_count == 1) {
-                nx = 0; ny = 0; nw = sw; nh = usable_h;
+                nx = 0; ny = MARGINES_GORNY; nw = sw; nh = usable_h;
             } else if (i == 0) {
-                nx = 0; ny = 0; nw = (int)(sw * master_fact); nh = usable_h;
+                nx = 0; ny = MARGINES_GORNY; nw = (int)(sw * master_fact); nh = usable_h;
             } else {
                 int sc = tiled_count - 1;
                 nx = (int)(sw * master_fact); nw = sw - nx;
-                nh = usable_h / sc; ny = (i - 1) * nh;
-                if (i == tiled_count - 1) nh = usable_h - ny;
+                nh = usable_h / sc; ny = MARGINES_GORNY + (i - 1) * nh;
+                if (i == tiled_count - 1) nh = usable_h - (ny - MARGINES_GORNY);
             }
         } else if (current_layout == 1) { // Grid
             int rows = 1, cols = 1;
             while (rows * cols < tiled_count) { if (cols == rows) cols++; else rows++; }
             int r = i / cols; int c = i % cols;
-            nw = sw / cols; nh = usable_h / rows; nx = c * nw; ny = r * nh;
+            nw = sw / cols; nh = usable_h / rows; nx = c * nw; ny = MARGINES_GORNY + r * nh;
         }
 
         nx += gaps; ny += gaps; nw -= 2 * gaps; nh -= 2 * gaps;
@@ -228,7 +201,7 @@ void apply_layout(Display *dpy, int screen) {
 void focus_fallback(Display *dpy, Window root) {
     Window first_valid = None;
     for (int i = 0; i < client_count; i++) {
-        if (clients[i].valid && clients[i].tag == active_tag) {
+        if (clients[i].valid) {
             first_valid = clients[i].win;
             break;
         }
@@ -244,44 +217,8 @@ void focus_fallback(Display *dpy, Window root) {
 }
 
 // =============================================================
-// WORKSPACE SWITCH
+// WINDOW MANAGEMENT
 // =============================================================
-void view_tag(Display *dpy, int screen, int tag) {
-    if (tag == active_tag) return;
-    active_tag = tag;
-    update_polybar_tags(dpy, DefaultRootWindow(dpy));
-
-    int sw = DisplayWidth(dpy, screen);
-    int sh = DisplayHeight(dpy, screen);
-
-    for (int i = 0; i < client_count; i++) {
-        if (!clients[i].valid) continue;
-        if (clients[i].tag == active_tag) {
-            XMapWindow(dpy, clients[i].win);
-        } else {
-            XMoveWindow(dpy, clients[i].win, sw * 2, sh * 2);
-        }
-    }
-
-    apply_layout(dpy, screen);
-    focus_fallback(dpy, DefaultRootWindow(dpy));
-    XFlush(dpy);
-}
-
-void tag_window(Display *dpy, int screen, Window w, int tag) {
-    Client *c = client_find(w);
-    if (!c) return;
-    c->tag = tag;
-    set_net_wm_desktop(dpy, w, tag);
-
-    int sw = DisplayWidth(dpy, screen);
-    int sh = DisplayHeight(dpy, screen);
-    if (tag != active_tag)
-        XMoveWindow(dpy, w, sw * 2, sh * 2);
-
-    apply_layout(dpy, screen);
-    focus_fallback(dpy, DefaultRootWindow(dpy));
-}
 
 void toggle_floating(Display *dpy, int screen) {
     Window focused; int revert_to;
@@ -292,8 +229,8 @@ void toggle_floating(Display *dpy, int screen) {
     c->floating = !c->floating;
     if (c->floating) {
         int sw = DisplayWidth(dpy, screen);
-        int sh = DisplayHeight(dpy, screen) - MARGINES_DOLNY;
-        XMoveResizeWindow(dpy, focused, (sw - 800) / 2, (sh - 600) / 2, 800, 600);
+        int sh = DisplayHeight(dpy, screen) - MARGINES_GORNY;
+        XMoveResizeWindow(dpy, focused, (sw - 800) / 2, MARGINES_GORNY + (sh - 600) / 2, 800, 600);
     }
     XSetWindowBorderWidth(dpy, focused, GRUBOSC_RAMKI);
     apply_layout(dpy, screen);
@@ -306,7 +243,6 @@ void focus_stack(Display *dpy, int dir) {
 
     for (int i = 0; i < client_count; i++) {
         if (!clients[i].valid) continue;
-        if (clients[i].tag != active_tag) continue;
         wins[cnt] = clients[i].win;
         if (clients[i].win == focused) cur = cnt;
         cnt++;
@@ -347,7 +283,6 @@ int main(void) {
     XDefineCursor(dpy, root, cursor);
     
     XSelectInput(dpy, root, SubstructureRedirectMask | SubstructureNotifyMask | PropertyChangeMask | EnterWindowMask);
-    update_polybar_tags(dpy, root);
 
     // =========================================================
     // XGRABKEY SYSTEM (ALL DEFINITIONS FROM CONFIG.H)
@@ -373,12 +308,6 @@ int main(void) {
     XGrabKey(dpy, XKeysymToKeycode(dpy, KLUCZ_ZAMKNIJ), MOD_KEY | ShiftMask, root,          False, GrabModeAsync, GrabModeAsync);
     XGrabKey(dpy, XKeysymToKeycode(dpy, KLUCZ_POMOCY), MOD_KEY | ShiftMask, root,           False, GrabModeAsync, GrabModeAsync);
     XGrabKey(dpy, XKeysymToKeycode(dpy, KLUCZ_PRINT_SCREEN), 0, root,                       False, GrabModeAsync, GrabModeAsync);
-
-    KeySym tag_keys[] = { XK_1, XK_2, XK_3, XK_4, XK_5, XK_6, XK_7, XK_8, XK_9 };
-    for (int i = 0; i < 9; i++) {
-        XGrabKey(dpy, XKeysymToKeycode(dpy, tag_keys[i]), MOD_KEY, root, False, GrabModeAsync, GrabModeAsync);
-        XGrabKey(dpy, XKeysymToKeycode(dpy, tag_keys[i]), MOD_KEY | ShiftMask, root, False, GrabModeAsync, GrabModeAsync);
-    }
 
     XGrabKey(dpy, XKeysymToKeycode(dpy, XF86XK_AudioRaiseVolume), 0, root, True, GrabModeAsync, GrabModeAsync);
     XGrabKey(dpy, XKeysymToKeycode(dpy, XF86XK_AudioLowerVolume), 0, root, True, GrabModeAsync, GrabModeAsync);
@@ -407,17 +336,16 @@ int main(void) {
             int help_win = is_help_window(dpy, ev.xmaprequest.window);
             int should_float = help_win || is_fullscreen_or_util(dpy, ev.xmaprequest.window, screen);
             
-            client_add(ev.xmaprequest.window, active_tag, should_float);
-            set_net_wm_desktop(dpy, ev.xmaprequest.window, active_tag);
+            client_add(ev.xmaprequest.window, should_float);
 
             if (help_win) {
                 int sw = DisplayWidth(dpy, screen);
-                int sh = DisplayHeight(dpy, screen) - MARGINES_DOLNY;
-                XMoveResizeWindow(dpy, ev.xmaprequest.window, (sw - 750) / 2, (sh - 600) / 2, 750, 600);
+                int sh = DisplayHeight(dpy, screen) - MARGINES_GORNY;
+                XMoveResizeWindow(dpy, ev.xmaprequest.window, (sw - 750) / 2, MARGINES_GORNY + (sh - 600) / 2, 750, 600);
                 XSetWindowBorderWidth(dpy, ev.xmaprequest.window, 1);
             }
             else if (should_float && wa.width >= DisplayWidth(dpy, screen)) {
-                XMoveResizeWindow(dpy, ev.xmaprequest.window, 0, 0, DisplayWidth(dpy, screen), DisplayHeight(dpy, screen));
+                XMoveResizeWindow(dpy, ev.xmaprequest.window, 0, MARGINES_GORNY, DisplayWidth(dpy, screen), DisplayHeight(dpy, screen) - MARGINES_GORNY);
                 XSetWindowBorderWidth(dpy, ev.xmaprequest.window, 0);
             } else {
                 XSetWindowBackground(dpy, ev.xmaprequest.window, KOLOR_ZWYKLY);
@@ -450,13 +378,6 @@ int main(void) {
             }
             if (ev.xunmap.window == locked_window) locked_window = None;
         }
-        else if (ev.type == ClientMessage) {
-            if (ev.xclient.message_type == net_current_desktop) {
-                int target_tag = ev.xclient.data.l[0] + 1;
-                if (target_tag >= 1 && target_tag <= 9)
-                    view_tag(dpy, screen, target_tag);
-            }
-        }
         else if (ev.type == ConfigureRequest) {
             XWindowChanges wc;
             wc.x = ev.xconfigurerequest.x; wc.y = ev.xconfigurerequest.y;
@@ -474,7 +395,7 @@ int main(void) {
                 }
             } else if (ev.xcrossing.window != locked_window && !is_dock(dpy, ev.xcrossing.window)) {
                 Client *c = client_find(ev.xcrossing.window);
-                if (c && c->tag == active_tag) {
+                if (c) {
                     XSetInputFocus(dpy, ev.xcrossing.window, RevertToParent, CurrentTime);
                     XSetWindowBorder(dpy, ev.xcrossing.window, KOLOR_FOCUS);
                     set_active_window(dpy, root, ev.xcrossing.window);
@@ -487,7 +408,7 @@ int main(void) {
             }
         }
         // =========================================================
-        // KEYPRESS HANDLING (COMPLETELY REFACTORED SEPARATIONS)
+        // KEYPRESS HANDLING
         // =========================================================
         else if (ev.type == KeyPress) {
             KeySym base_ks = XLookupKeysym(&ev.xkey, 0);
@@ -545,15 +466,6 @@ int main(void) {
             else if (base_ks == KLUCZ_MASTER_PLUS && ev.xkey.state == (MOD_KEY | ShiftMask)) {
                 master_fact += 0.05; if (master_fact > 0.9) master_fact = 0.9; apply_layout(dpy, screen);
             }
-            else if (base_ks >= XK_1 && base_ks <= XK_9) {
-                int target_tag = base_ks - XK_1 + 1;
-                if (ev.xkey.state == (MOD_KEY | ShiftMask)) {
-                    Window focused; int rev; XGetInputFocus(dpy, &focused, &rev);
-                    tag_window(dpy, screen, focused, target_tag);
-                } else if (ev.xkey.state == MOD_KEY) {
-                    view_tag(dpy, screen, target_tag);
-                }
-            }
             else if (base_ks == KLUCZ_ZAMKNIJ && ev.xkey.state == (MOD_KEY | ShiftMask)) break;
             
             else if (base_ks == KLUCZ_ZAMKNIJ && ev.xkey.subwindow != None) {
@@ -566,7 +478,7 @@ int main(void) {
             }
             else if (base_ks == KLUCZ_MAKSYMALIZUJ && ev.xkey.state == (MOD_KEY | ShiftMask) && ev.xkey.subwindow != None) {
                 if (!is_dock(dpy, ev.xkey.subwindow)) {
-                    XMoveResizeWindow(dpy, ev.xkey.subwindow, 0, 0, DisplayWidth(dpy, screen), DisplayHeight(dpy, screen));
+                    XMoveResizeWindow(dpy, ev.xkey.subwindow, 0, MARGINES_GORNY, DisplayWidth(dpy, screen), DisplayHeight(dpy, screen) - MARGINES_GORNY);
                     XSetWindowBorderWidth(dpy, ev.xkey.subwindow, 0);
                     XRaiseWindow(dpy, ev.xkey.subwindow);
                 }
@@ -575,12 +487,15 @@ int main(void) {
                 if (!is_dock(dpy, ev.xkey.subwindow)) {
                     XMoveResizeWindow(dpy, ev.xkey.subwindow,
                         (DisplayWidth(dpy, screen) - 800) / 2,
-                        (DisplayHeight(dpy, screen) - 600) / 2, 800, 600);
+                        MARGINES_GORNY + (DisplayHeight(dpy, screen) - MARGINES_GORNY - 600) / 2, 800, 600);
                     XSetWindowBorderWidth(dpy, ev.xkey.subwindow, GRUBOSC_RAMKI);
                     XSetWindowBorder(dpy, ev.xkey.subwindow, KOLOR_FOCUS);
                 }
             }
         }
+        // =========================================================
+        // MOUSE / DRAG / RESIZE LOGIC
+        // =========================================================
         else if (ev.type == ButtonPress && ev.xbutton.subwindow != None) {
             if (is_dock(dpy, ev.xbutton.subwindow)) continue;
             if (ev.xbutton.subwindow != locked_window) {
@@ -591,6 +506,12 @@ int main(void) {
                 if (attr.border_width > 0) {
                     start = ev.xbutton;
                     XSetWindowBorder(dpy, ev.xbutton.subwindow, KOLOR_FOCUS);
+                    
+                    Client *c = client_find(ev.xbutton.subwindow);
+                    if (c && !c->floating) {
+                        c->floating = 1;
+                        apply_layout(dpy, screen); 
+                    }
                 } else { start.subwindow = None; }
             }
         }
@@ -600,19 +521,20 @@ int main(void) {
             int nx = attr.x, ny = attr.y, nw = attr.width, nh = attr.height;
             if (start.button == 1) {
                 nx += xdiff; ny += ydiff;
-                if (nx < 0) nx = 0; if (ny < 0) ny = 0;
+                if (nx < 0) nx = 0; 
+                if (ny < MARGINES_GORNY) ny = MARGINES_GORNY; 
                 if (nx + nw + 2 * GRUBOSC_RAMKI > DisplayWidth(dpy, screen))
                     nx = DisplayWidth(dpy, screen) - nw - 2 * GRUBOSC_RAMKI;
-                if (ny + nh + 2 * GRUBOSC_RAMKI > (DisplayHeight(dpy, screen) - MARGINES_DOLNY))
-                    ny = (DisplayHeight(dpy, screen) - MARGINES_DOLNY) - nh - 2 * GRUBOSC_RAMKI;
+                if (ny + nh + 2 * GRUBOSC_RAMKI > DisplayHeight(dpy, screen))
+                    ny = DisplayHeight(dpy, screen) - nh - 2 * GRUBOSC_RAMKI;
             } else if (start.button == 3) {
                 nw += xdiff; nh += ydiff;
                 if (nw < MIN_ROZMIAR) nw = MIN_ROZMIAR;
                 if (nh < MIN_ROZMIAR) nh = MIN_ROZMIAR;
                 if (nx + nw + 2 * GRUBOSC_RAMKI > DisplayWidth(dpy, screen))
                     nw = DisplayWidth(dpy, screen) - nx - 2 * GRUBOSC_RAMKI;
-                if (ny + nh + 2 * GRUBOSC_RAMKI > (DisplayHeight(dpy, screen) - MARGINES_DOLNY))
-                    nh = (DisplayHeight(dpy, screen) - MARGINES_DOLNY) - ny - 2 * GRUBOSC_RAMKI;
+                if (ny + nh + 2 * GRUBOSC_RAMKI > DisplayHeight(dpy, screen))
+                    nh = DisplayHeight(dpy, screen) - ny - 2 * GRUBOSC_RAMKI;
             }
             XMoveResizeWindow(dpy, start.subwindow, nx, ny, nw, nh);
         }
