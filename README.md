@@ -39,7 +39,7 @@ sudo make install
 
 | Keybind | Action |
 | :--- | :--- |
-| **Super + T** | Launch Terminal (`st`) |
+| **Super + Enter** | Launch Terminal (`st`) |
 | **Super + Q** | Kill active window (Brutal/Instant) |
 | **Super + Shift + F** | Fullscreen Mode (No borders) |
 | **Super + Shift + W** | Windowed Mode (800x600, Centered) |
@@ -47,6 +47,7 @@ sudo make install
 | **Super + Left Click** | Move Window |
 | **Super + Right Click** | Resize Window |
 | **Super + D**| Lock and Unlock Window |
+| **Super + S**| Automatically sets windows |
 
 
 
